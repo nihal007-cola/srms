@@ -13,12 +13,12 @@
         <!-- LEFT PANEL - Navigation                       -->
         <!-- ============================================ -->
         <div class="side-panel">
-            <div class="panel-header">
-                <div class="logo">
-                    <img src="/static/assets/images/sneha_logo.png" alt="Sneha Creations" style="height: 40px; width: auto; margin-right: 10px;">
-                    <span>Sneha ERP</span>
+            <div class="panel-header" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 16px;">
+                <div class="logo" style="display: flex; flex-direction: column; align-items: center; width: 100%;">
+                    <img src="/static/assets/images/sneha_logo.png" alt="Sneha Creations" style="width: 90%; height: auto; max-width: 180px; display: block; margin: 0 auto;">
+                    <span style="font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-top: 6px; text-align: center;">Sneha Creations ERP</span>
                 </div>
-                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme" style="position: absolute; top: 12px; right: 12px;">
                     <i class="fas fa-moon" id="themeIcon"></i>
                 </button>
             </div>
@@ -136,7 +136,7 @@
                     <h2><i class="fas fa-layer-group"></i> Bill of Materials</h2>
                     <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
                         <div class="search-box"><i class="fas fa-search"></i><input type="text" id="bomSearch" placeholder="Search FG / Buyer..." onkeyup="filterTable('bomSearch', 'bomOrderBody')"></div>
-                        <button class="btn btn-primary btn-sm" onclick="refreshBOMOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="btn btn-primary btn-sm" onclick="refreshBOMOrders()"><i class="fas fa-sync"></i> Refresh</button> 
                         <button class="btn btn-warning btn-sm" onclick="debugFGStatus()"><i class="fas fa-bug"></i> Debug</button>
                     </div>
                 </div>
@@ -167,11 +167,11 @@
                     <h2><i class="fas fa-clipboard-check"></i> Goods Receipt Note</h2>
                     <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
                         <div class="search-box"><i class="fas fa-search"></i><input type="text" id="grnSearch" placeholder="Search PO / Supplier..." onkeyup="filterTable('grnSearch', 'grnContainer', 'po-card')"></div>
-                        <button class="btn btn-primary btn-sm" onclick="refreshGRNOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="btn btn-primary btn-sm" onclick="refreshGRNOrders()"><i class="fas fa-sync"></i> Refresh</button> 
                         <button class="btn btn-warning btn-sm" onclick="refreshShortfalls()"><i class="fas fa-exclamation-triangle"></i> Shortfalls</button>
                     </div>
                 </div>
-                <div id="grnContainer"><div class="text-muted" style="text-align:center;padding:20px;">Loading GRN orders...</div></div>
+                <div id="grnContainer"><div class="text-muted" style="text-align:center;padding:20px;">Loading GRN orders...</div></div> 
             </div>
 
             <!-- Module Content: ISSUE_RM -->
@@ -259,7 +259,7 @@
                             <option value="ALL">All Status</option>
                             <option value="DRAFT">Draft</option>
                             <option value="PROCESSED">Processed</option>
-                            <option value="PARTIAL">Partial</option>
+                            <option value="PARTIAL">Partial</option> 
                             <option value="COMPLETED">Completed</option>
                         </select>
                         <select id="filter-ordered-supplier" onchange="filterReport('rm_ordered')"><option value="ALL">All Suppliers</option></select>
@@ -286,7 +286,7 @@
         <div class="modal-box" style="max-width:480px;">
             <button class="modal-close" onclick="closeBuyerModal()">&times;</button>
             <h2><i class="fas fa-user-plus"></i> Add Buyer</h2>
-            <div class="form-group"><label>Buyer Name <span class="required">*</span></label><input type="text" id="newBuyerName"></div>
+            <div class="form-group"><label>Buyer Name <span class="required">*</span></label><input type="text" id="newBuyerName"></div> 
             <div class="form-group"><label>GST No. <span class="required">*</span></label><input type="text" id="newGstNo"></div>
             <div class="form-group"><label>Address</label><input type="text" id="newAddress"></div>
             <div class="form-group"><label>Contact Person</label><input type="text" id="newContactPerson"></div>
