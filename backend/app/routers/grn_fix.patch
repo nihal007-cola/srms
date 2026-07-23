@@ -1,0 +1,32 @@
+--- a/grn.py
++++ b/grn.py
+@@ -250,6 +250,17 @@ def save_grn(data: schemas.GRNSaveRequest, db: Session = Depends(get_db)):
+                     'issueDelta': 0
+                 })
+             
++            # FIX: Ensure requirement_key is properly set for snapshot update
++            requirement_key = item['requirementKey']
++            if not requirement_key:
++                requirement_key = crud.get_requirement_key(
++                    item['fgKey'],
++                    item['garmentSize'],
++                    item['color'],
++                    item['itemSize']
++                )
++                logging.info(f"Generated requirement_key: {requirement_key}")
++            
+             snapshot_updates.append({
+                 'requirementKey': requirement_key,
+                 'fgKey': item['fgKey'],
+@@ -300,6 +311,10 @@ def save_grn(data: schemas.GRNSaveRequest, db: Session = Depends(get_db)):
+         
+         crud.add_ledger_entries_bulk(db, entries_to_insert)
+         
++        # FIX: Ensure snapshot is updated with all items
++        if snapshot_updates:
++            crud.update_inventory_snapshot(db, snapshot_updates)
++            logging.info(f"Updated inventory snapshot with {len(snapshot_updates)} items")
++        
+         return {
+             'success': True,
+             'message': f'GRN saved successfully. Status: {new_status}',

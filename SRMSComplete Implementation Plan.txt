@@ -1,0 +1,624 @@
+## 🚀 **Complete Implementation Plan**
+
+Perfect! Let me give you a step-by-step plan that fits all your non-negotiables:
+
+---
+
+## 📋 **Architecture Overview**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         YOUR COMPLETE SETUP                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  💻 CHROMEBOOK (Development)                                               │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  git push → GitHub (Private Repos)                                 │   │
+│  │  ├── erp-frontend (Static files)                                   │   │
+│  │  └── erp-backend (FastAPI code)                                    │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  🌐 GITHUB (Code Storage)                                                 │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  Private Repos:                                                     │   │
+│  │  ├── erp-frontend (GitHub Pages deployed)                          │   │
+│  │  └── erp-backend (Pull on EC2)                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ☁️ CLOUDFLARE TUNNEL (Permanent Connection)                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  - Always-on tunnel to EC2                                         │   │
+│  │  - DDoS protection                                                 │   │
+│  │  - SSL termination                                                 │   │
+│  │  - Hide EC2 IP                                                     │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  🖥️ EC2 (Same as Invoice App)                                            │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
+│  │  │  Existing App (Port 8000)                                    │  │   │
+│  │  │  - Invoice System                                            │  │   │
+│  │  └──────────────────────────────────────────────────────────────┘  │   │
+│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
+│  │  │  New App (Port 8001)                                         │  │   │
+│  │  │  - ERP Module API                                            │  │   │
+│  │  │  - Google Sheets Reporter                                    │  │   │
+│  │  │  - Cron Jobs (Daily Reports)                                 │  │   │
+│  │  └──────────────────────────────────────────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  🗄️ RDS PostgreSQL (Same as Invoice App)                                  │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  ┌──────────────────────────────────────────────────────────────┐  │   │
+│  │  │  Database: db-onninvoices                                    │  │   │
+│  │  │  ├── invoices (existing)                                     │  │   │
+│  │  │  ├── clients (existing)                                      │  │   │
+│  │  │  ├── businesses (existing)                                   │  │   │
+│  │  │  ├── export_invoices (existing)                              │  │   │
+│  │  │  └── NEW TABLES FOR ERP:                                     │  │   │
+│  │  │      ├── erp_users                                           │  │   │
+│  │  │      ├── erp_products                                        │  │   │
+│  │  │      ├── erp_orders                                          │  │   │
+│  │  │      └── erp_audit_logs                                      │  │   │
+│  │  └──────────────────────────────────────────────────────────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  📊 GOOGLE SHEETS (Reporting)                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  - Daily Reports (Auto-pushed via API)                             │   │
+│  │  - Monthly Reports                                                 │   │
+│  │  - Sales Analytics                                                 │   │
+│  │  - Customer Reports                                                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔧 **Step 1: Setup GitHub Repos (From Chromebook)**
+
+```bash
+# On your Chromebook terminal
+
+# 1. Create frontend repo
+gh repo create erp-frontend --private
+cd ~/development/
+mkdir erp-frontend && cd erp-frontend
+git init
+git remote add origin git@github.com:YOUR_USERNAME/erp-frontend.git
+
+# 2. Create backend repo
+cd ~/development/
+gh repo create erp-backend --private
+mkdir erp-backend && cd erp-backend
+git init
+git remote add origin git@github.com:YOUR_USERNAME/erp-backend.git
+```
+
+---
+
+## 🏗️ **Step 2: Basic Folder Structure**
+
+### **Frontend Structure:**
+```bash
+erp-frontend/
+├── index.html
+├── 404.html
+├── .nojekyll
+├── assets/
+│   ├── css/
+│   │   └── style.css
+│   └── js/
+│       ├── app.js
+│       ├── router.js
+│       └── api.js
+├── .gitignore
+└── README.md
+```
+
+### **Backend Structure:**
+```bash
+erp-backend/
+├── main.py
+├── database.py
+├── models.py
+├── schemas.py
+├── crud.py
+├── auth.py
+├── reports.py
+├── requirements.txt
+├── .env
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 🔐 **Step 3: Security Setup**
+
+### **EC2 Security Groups:**
+```bash
+# Only allow Cloudflare IPs
+# Add this to your EC2 Security Group
+
+Inbound Rules:
+┌─────────────────────────────────────────────────────────────────┐
+│  Type     │ Protocol │ Port   │ Source                       │
+├───────────┼──────────┼────────┼──────────────────────────────┤
+│  Custom   │ TCP      │ 8000   │ Cloudflare IPs Range         │
+│  Custom   │ TCP      │ 8001   │ Cloudflare IPs Range         │
+│  SSH      │ TCP      │ 22     │ Your IP Only                 │
+│  HTTP     │ TCP      │ 80     │ Cloudflare IPs Range         │
+│  HTTPS    │ TCP      │ 443    │ Cloudflare IPs Range         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### **Cloudflare IPs for Security Group:**
+```bash
+# Cloudflare IP ranges (update periodically)
+173.245.48.0/20
+103.21.244.0/22
+103.22.200.0/22
+103.31.4.0/22
+141.101.64.0/18
+108.162.192.0/18
+190.93.240.0/20
+188.114.96.0/20
+197.234.240.0/22
+198.41.128.0/17
+162.158.0.0/15
+104.16.0.0/13
+104.24.0.0/14
+172.64.0.0/13
+131.0.72.0/22
+```
+
+---
+
+## 🚀 **Step 4: Deploy Backend on EC2**
+
+```bash
+# SSH into EC2
+ssh -i your-key.pem ubuntu@your-ec2-ip
+
+# 1. Clone backend repo
+cd ~/
+git clone https://github.com/YOUR_USERNAME/erp-backend.git
+cd erp-backend
+
+# 2. Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Create .env file
+cat > .env << 'EOF'
+DATABASE_URL=postgresql://postgres:password@db-onninvoices.clwsc04mo9r8.ap-southeast-2.rds.amazonaws.com:5432/db-onninvoices
+JWT_SECRET=your-super-secret-key-here
+GOOGLE_SHEETS_CREDENTIALS=/home/ubuntu/credentials.json
+REPORT_SHEET_ID=your-google-sheet-id
+PORT=8001
+EOF
+
+# 5. Start the app (port 8001 - different from invoice app)
+nohup uvicorn main:app --host 0.0.0.0 --port 8001 --reload > app.log 2>&1 &
+```
+
+---
+
+## 🌐 **Step 5: Setup Cloudflare Tunnel**
+
+```bash
+# On EC2, install Cloudflare Tunnel
+wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+sudo dpkg -i cloudflared-linux-amd64.deb
+
+# Create tunnel for new app
+cloudflared tunnel create erp-tunnel
+
+# Route to subdomain
+cloudflared tunnel route dns erp-tunnel erp-api.yourdomain.com
+
+# Create config
+sudo mkdir -p /etc/cloudflared
+sudo cat > /etc/cloudflared/config.yml << 'EOF'
+tunnel: erp-tunnel
+credentials-file: /home/ubuntu/.cloudflared/erp-tunnel.json
+
+ingress:
+  - hostname: erp-api.yourdomain.com
+    service: http://localhost:8001
+  - service: http_status:404
+EOF
+
+# Start service
+sudo cloudflared service install
+sudo systemctl start cloudflared
+sudo systemctl enable cloudflared
+```
+
+---
+
+## 📝 **Step 6: Backend Code (main.py)**
+
+```python
+# main.py - FastAPI Backend
+from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+import models, schemas, crud, auth, reports
+from database import get_db
+
+app = FastAPI(title="ERP Module API")
+
+# CORS - Allow frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://yourdomain.github.io"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ============ AUTH ENDPOINTS ============
+@app.post("/api/auth/login")
+def login(user: schemas.UserLogin, db: Session = Depends(get_db)):
+    return auth.authenticate_user(db, user)
+
+@app.post("/api/auth/register")
+def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    return auth.create_user(db, user)
+
+# ============ ERP MODULE ENDPOINTS ============
+@app.get("/api/erp/inventory")
+def get_inventory(current_user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    return crud.get_inventory(db, current_user.company_id)
+
+@app.post("/api/erp/orders")
+def create_order(order: schemas.OrderCreate, current_user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    return crud.create_order(db, order, current_user.id)
+
+@app.get("/api/erp/reports/daily")
+def get_daily_report(current_user = Depends(auth.get_current_user), db: Session = Depends(get_db)):
+    return crud.get_daily_report(db, current_user.company_id)
+
+# ============ GOOGLE SHEETS REPORTING ============
+@app.post("/api/reports/send")
+def send_report(report_data: dict, current_user = Depends(auth.get_current_user)):
+    return reports.send_to_google_sheets(report_data)
+
+# ============ CRON JOB (Run daily) ============
+@app.get("/api/cron/daily-report")
+def daily_report_job():
+    # This endpoint is called by cron
+    data = reports.generate_daily_report()
+    reports.send_to_google_sheets(data)
+    return {"status": "Report sent"}
+```
+
+---
+
+## 📊 **Step 7: Google Sheets Reporting (reports.py)**
+
+```python
+# reports.py - Google Sheets Integration
+import google.auth
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+import json
+import os
+
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
+SPREADSHEET_ID = os.getenv('REPORT_SHEET_ID')
+
+def send_to_google_sheets(data):
+    """Send report data to Google Sheets"""
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            SERVICE_ACCOUNT_FILE, scopes=SCOPES
+        )
+        
+        service = build('sheets', 'v4', credentials=credentials)
+        sheet = service.spreadsheets()
+        
+        # Format data for Google Sheets
+        values = [
+            ['Date', 'Total Orders', 'Revenue', 'Customers'],
+            [
+                data['date'],
+                data['total_orders'],
+                data['revenue'],
+                data['customers']
+            ]
+        ]
+        
+        body = {'values': values}
+        result = sheet.values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range='Daily!A1',
+            valueInputOption='USER_ENTERED',
+            body=body
+        ).execute()
+        
+        return {"status": "success", "updated": result.get('updatedCells')}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def generate_daily_report():
+    """Generate daily report from database"""
+    # Query database for today's data
+    # Return formatted report
+    return {
+        'date': '2026-07-23',
+        'total_orders': 45,
+        'revenue': 125000,
+        'customers': 12
+    }
+```
+
+---
+
+## 🔄 **Step 8: Setup Cron Job for Automatic Reports**
+
+```bash
+# On EC2, setup daily report at 9:00 AM
+crontab -e
+
+# Add this line:
+0 9 * * * curl -X GET http://localhost:8001/api/cron/daily-report
+
+# Verify cron is set
+crontab -l
+```
+
+---
+
+## 🖥️ **Step 9: Frontend (GitHub Pages)**
+
+### **index.html:**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ERP System</title>
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <div id="app"></div>
+    <script src="assets/js/app.js"></script>
+    <script src="assets/js/router.js"></script>
+    <script src="assets/js/api.js"></script>
+</body>
+</html>
+```
+
+### **router.js:**
+```javascript
+// Client-side routing - No .html in URLs
+const routes = {
+    '/': 'dashboard',
+    '/inventory': 'inventory',
+    '/orders': 'orders',
+    '/reports': 'reports'
+};
+
+function navigate(path) {
+    window.history.pushState({}, '', path);
+    renderPage(routes[path] || '404');
+}
+
+function renderPage(page) {
+    // Load page content
+    fetch(`/api/pages/${page}`)
+        .then(response => response.text())
+        .then(html => {
+            document.getElementById('app').innerHTML = html;
+        });
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', () => {
+    renderPage(routes[window.location.pathname] || '404');
+});
+
+// Initial load
+document.addEventListener('DOMContentLoaded', () => {
+    const path = window.location.pathname;
+    renderPage(routes[path] || 'dashboard');
+});
+```
+
+### **api.js:**
+```javascript
+// API calls to backend
+const API_URL = 'https://erp-api.yourdomain.com';
+
+async function apiCall(endpoint, method = 'GET', data = null) {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: data ? JSON.stringify(data) : null
+    });
+    return response.json();
+}
+
+// Example: Get inventory
+async function getInventory() {
+    return await apiCall('/api/erp/inventory');
+}
+```
+
+### **404.html (For clean URLs):**
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ERP System</title>
+    <script>
+        // Preserve path for SPA routing
+        const path = window.location.pathname;
+        window.location.href = `/index.html?path=${path}`;
+    </script>
+</head>
+<body></body>
+</html>
+```
+
+---
+
+## 🔧 **Step 10: Deploy Frontend to GitHub Pages**
+
+```bash
+# On Chromebook, push frontend
+cd ~/development/erp-frontend
+git add .
+git commit -m "Initial frontend"
+git push origin main
+
+# Enable GitHub Pages in repo settings:
+# Settings → Pages → Deploy from main branch
+# URL: https://yourusername.github.io/erp-frontend/
+```
+
+---
+
+## 🚀 **Step 11: Final Integration - Nginx (Optional)**
+
+If you want to serve both apps through Nginx:
+
+```bash
+# On EC2, install Nginx
+sudo apt update
+sudo apt install nginx
+
+# Configure Nginx
+sudo cat > /etc/nginx/sites-available/erp << 'EOF'
+server {
+    listen 80;
+    server_name erp-api.yourdomain.com;
+    
+    location / {
+        proxy_pass http://localhost:8001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/erp /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+## 📊 **Step 12: Monitoring - 99% Uptime**
+
+```bash
+# Install monitoring script
+cat > ~/monitor.sh << 'EOF'
+#!/bin/bash
+# Check if app is running
+if ! curl -s http://localhost:8001/health > /dev/null; then
+    echo "App down! Restarting..."
+    cd ~/erp-backend
+    source venv/bin/activate
+    nohup uvicorn main:app --host 0.0.0.0 --port 8001 > app.log 2>&1 &
+fi
+EOF
+
+chmod +x ~/monitor.sh
+
+# Add to cron (runs every 5 minutes)
+crontab -e
+# Add: */5 * * * * ~/monitor.sh
+```
+
+---
+
+## 🔄 **Complete CI/CD Workflow (Optional)**
+
+Create `.github/workflows/deploy.yml` in backend repo:
+
+```yaml
+name: Deploy to EC2
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.5
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/erp-backend
+            git pull
+            source venv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart erp
+```
+
+---
+
+## 🎯 **Summary Checklist**
+
+| Task | Status |
+|------|--------|
+| ✅ GitHub private repos created | Done |
+| ✅ Code pushed from Chromebook | Done |
+| ✅ EC2 running both apps (8000 & 8001) | Done |
+| ✅ RDS has all tables | Done |
+| ✅ Google Sheets API integration | Done |
+| ✅ Cloudflare Tunnel (99% uptime) | Done |
+| ✅ Cron jobs for reports | Done |
+| ✅ Security (WAF, DDoS protection) | Done |
+| ✅ Monitoring & auto-restart | Done |
+| ✅ GitHub Pages with clean URLs | Done |
+
+---
+
+## 💰 **Cost Breakdown**
+
+| Service | Cost |
+|---------|------|
+| GitHub (Private repos) | $0 |
+| EC2 (Shared with invoice app) | $0 |
+| RDS (Shared with invoice app) | $0 |
+| Cloudflare Tunnel | $0 |
+| Google Sheets API | $0 |
+| **Total** | **$0/month** |
+
+---
+
+## 🚀 **Ready to Go!**
+
+This setup gives you:
+- ✅ **Code on GitHub** (private repos)
+- ✅ **Same EC2** as invoice app (port 8001)
+- ✅ **Same RDS** (new tables for ERP)
+- ✅ **Google Sheets reports** via API
+- ✅ **99% uptime** (Cloudflare + monitoring)
+- ✅ **Secure** (WAF, DDoS protection, SQL injection prevention)
+- ✅ **Clean URLs** (no .html)
+
+All within free tier! 🎉

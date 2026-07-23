@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sneha Creations ERP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="app">
+        <!-- ============================================ -->
+        <!-- LEFT PANEL - Navigation                       -->
+        <!-- ============================================ -->
+        <div class="side-panel">
+            <div class="panel-header">
+                <div class="logo">
+                    <i class="fas fa-cubes"></i>
+                    <span>Sneha ERP</span>
+                </div>
+                <button class="theme-toggle" onclick="toggleTheme()" title="Toggle Theme">
+                    <i class="fas fa-moon" id="themeIcon"></i>
+                </button>
+            </div>
+            <nav class="panel-nav">
+                <div class="nav-item active" data-module="BUYER_ORDER">
+                    <i class="fas fa-file-invoice"></i>
+                    <span>Buyer Order</span>
+                </div>
+                <div class="nav-item" data-module="BOM">
+                    <i class="fas fa-layer-group"></i>
+                    <span>BOM</span>
+                </div>
+                <div class="nav-item" data-module="RM_ORDER">
+                    <i class="fas fa-boxes"></i>
+                    <span>RM Order</span>
+                </div>
+                <div class="nav-item" data-module="GRN">
+                    <i class="fas fa-clipboard-check"></i>
+                    <span>GRN</span>
+                </div>
+                <div class="nav-item" data-module="ISSUE_RM">
+                    <i class="fas fa-arrow-right-from-bracket"></i>
+                    <span>Issue RM</span>
+                </div>
+                <div class="nav-item" data-module="REPORTS">
+                    <i class="fas fa-chart-pie"></i>
+                    <span>Reports</span>
+                </div>
+            </nav>
+            <div class="panel-footer">
+                <span class="version">v1.0</span>
+                <span class="status"><i class="fas fa-circle" style="color:#34a853;"></i> Live</span>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- MAIN CONTENT                                 -->
+        <!-- ============================================ -->
+        <div class="main-content">
+            <!-- Module Content: BUYER_ORDER -->
+            <div class="module-content active" id="module-BUYER_ORDER">
+                <div class="content-header">
+                    <h2><i class="fas fa-file-invoice"></i> Create Buyer Order</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    </div>
+                </div>
+                <div class="form-card">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>FG Order Serial</label>
+                            <input type="text" id="fgOrderSerial" disabled style="background:#eef2f8;">
+                        </div>
+                        <div class="form-group">
+                            <label>Buyer Name <span class="required">*</span></label>
+                            <div style="display:flex;gap:4px;">
+                                <select id="buyerName" style="flex:1;"></select>
+                                <button class="btn btn-primary btn-sm" onclick="openBuyerModal()"><i class="fas fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Buyer GST</label>
+                            <input type="text" id="buyerGST" disabled style="background:#eef2f8;">
+                        </div>
+                        <div class="form-group">
+                            <label>Buyer Order No <span class="required">*</span></label>
+                            <input type="text" id="buyerOrderNo" placeholder="Enter buyer order number">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Order Date <span class="required">*</span></label>
+                            <input type="date" id="orderDate">
+                        </div>
+                        <div class="form-group">
+                            <label>Delivery Date <span class="required">*</span></label>
+                            <input type="date" id="deliveryDate" onchange="calculateLeadTime()">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Lead Time (Days)</label>
+                            <input type="number" id="leadTime" disabled style="background:#eef2f8;">
+                        </div>
+                        <div class="form-group">
+                            <label>No of FG <span class="required">*</span></label>
+                            <input type="number" id="noOfFG" placeholder="Enter number of FG" min="1">
+                        </div>
+                    </div>
+                    <div style="text-align:right;margin-top:4px;">
+                        <button class="btn btn-success" onclick="generateGrid()"><i class="fas fa-table"></i> Generate Grid</button>
+                    </div>
+                </div>
+                <div id="gridSection" style="display:none;">
+                    <div class="flex-between" style="margin-bottom:6px;">
+                        <span><strong>FG Grid</strong> <span id="gridOrderSerial" class="text-muted"></span></span>
+                        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                            <button class="btn btn-outline btn-sm" onclick="addSizeColumn()"><i class="fas fa-plus"></i> Add Size</button>
+                            <button class="btn btn-success btn-sm" onclick="saveOrder()" id="saveBtn"><i class="fas fa-save"></i> Save Order</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead id="gridHeaders"></thead>
+                            <tbody id="gridBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Module Content: BOM -->
+            <div class="module-content" id="module-BOM">
+                <div class="content-header">
+                    <h2><i class="fas fa-layer-group"></i> Bill of Materials</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="bomSearch" placeholder="Search FG / Buyer..." onkeyup="filterTable('bomSearch', 'bomOrderBody')"></div>
+                        <button class="btn btn-primary btn-sm" onclick="refreshBOMOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="btn btn-warning btn-sm" onclick="debugFGStatus()"><i class="fas fa-bug"></i> Debug</button>
+                    </div>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>FG Key</th><th>Buyer Order</th><th>Order Date</th><th style="min-width:200px;">Actions</th></tr></thead>
+                        <tbody id="bomOrderBody"><tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">Loading...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Module Content: RM_ORDER -->
+            <div class="module-content" id="module-RM_ORDER">
+                <div class="content-header">
+                    <h2><i class="fas fa-boxes"></i> Raw Material Orders</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="rmOrderSearch" placeholder="Search Supplier / FG..." onkeyup="filterTable('rmOrderSearch', 'rmOrderContainer', 'po-card')"></div>
+                        <button class="btn btn-primary btn-sm" onclick="refreshRMOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="btn btn-danger btn-sm" onclick="cancelRMOrder()"><i class="fas fa-undo"></i> Cancel RM Order</button>
+                    </div>
+                </div>
+                <div id="rmOrderContainer"><div class="text-muted" style="text-align:center;padding:20px;">Loading suppliers...</div></div>
+            </div>
+
+            <!-- Module Content: GRN -->
+            <div class="module-content" id="module-GRN">
+                <div class="content-header">
+                    <h2><i class="fas fa-clipboard-check"></i> Goods Receipt Note</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="grnSearch" placeholder="Search PO / Supplier..." onkeyup="filterTable('grnSearch', 'grnContainer', 'po-card')"></div>
+                        <button class="btn btn-primary btn-sm" onclick="refreshGRNOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                        <button class="btn btn-warning btn-sm" onclick="refreshShortfalls()"><i class="fas fa-exclamation-triangle"></i> Shortfalls</button>
+                    </div>
+                </div>
+                <div id="grnContainer"><div class="text-muted" style="text-align:center;padding:20px;">Loading GRN orders...</div></div>
+            </div>
+
+            <!-- Module Content: ISSUE_RM -->
+            <div class="module-content" id="module-ISSUE_RM">
+                <div class="content-header">
+                    <h2><i class="fas fa-arrow-right-from-bracket"></i> Issue RM</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-left:auto;">
+                        <div class="search-box"><i class="fas fa-search"></i><input type="text" id="issueRMSearch" placeholder="Search FG Key..." onkeyup="filterTable('issueRMSearch', 'issueRMOrderBody')"></div>
+                        <button class="btn btn-primary btn-sm" onclick="refreshIssueRMOrders()"><i class="fas fa-sync"></i> Refresh</button>
+                    </div>
+                </div>
+                <div class="table-wrap-rm">
+                    <table>
+                        <thead><tr><th>FG Key</th><th>Required</th><th>GRN Received</th><th>Issued</th><th>Available</th><th>Status</th><th style="min-width:180px;">Actions</th></tr></thead>
+                        <tbody id="issueRMOrderBody"><tr><td colspan="7" style="text-align:center;color:#62748e;padding:16px;">Loading pending issues...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Module Content: REPORTS -->
+            <div class="module-content" id="module-REPORTS">
+                <div class="content-header">
+                    <h2><i class="fas fa-chart-pie"></i> Reports Dashboard</h2>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:auto;">
+                        <button class="btn btn-primary btn-sm" onclick="loadReports()"><i class="fas fa-sync"></i> Refresh All</button>
+                    </div>
+                </div>
+                <div class="report-tabs">
+                    <div class="report-tab active" data-report="buyer_status" onclick="switchReportTab('buyer_status')">Buyer Order Status</div>
+                    <div class="report-tab" data-report="rm_stock" onclick="switchReportTab('rm_stock')">RM Stock</div>
+                    <div class="report-tab" data-report="rm_ordered" onclick="switchReportTab('rm_ordered')">RM Ordered</div>
+                </div>
+                <!-- Report: Buyer Order Status -->
+                <div id="report-buyer_status" class="report-container active">
+                    <div class="report-filters">
+                        <input type="text" id="filter-buyer-search" placeholder="Search FG Key / Buyer..." onkeyup="filterReport('buyer_status')">
+                        <select id="filter-buyer-status" onchange="filterReport('buyer_status')">
+                            <option value="ALL">All Status</option>
+                            <option value="BUYER_ORDER">Buyer Order</option>
+                            <option value="BOM">BOM</option>
+                            <option value="RM_ORDER">RM Order</option>
+                            <option value="GRN">GRN</option>
+                            <option value="ISSUE_RM">Issue RM</option>
+                            <option value="CLOSED">Closed</option>
+                        </select>
+                        <input type="date" id="filter-buyer-from" onchange="filterReport('buyer_status')" placeholder="From">
+                        <input type="date" id="filter-buyer-to" onchange="filterReport('buyer_status')" placeholder="To">
+                        <button class="btn btn-success btn-sm" onclick="exportReportCSV('buyer_status')"><i class="fas fa-file-excel"></i> Export CSV</button>
+                        <button class="btn btn-primary btn-sm" onclick="printReport('buyer_status')"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                    <div class="table-wrap" id="report-buyer_status-table">
+                        <table>
+                            <thead><tr><th>FG Key</th><th>Buyer Order</th><th>Buyer</th><th>Order Date</th><th>Status</th><th>BOM Time</th><th>RM Order Time</th><th>GRN Time</th><th>Issue Time</th></tr></thead>
+                            <tbody id="report-buyer_status-body"><tr><td colspan="9" style="text-align:center;color:#62748e;padding:16px;">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Report: RM Stock -->
+                <div id="report-rm_stock" class="report-container">
+                    <div class="report-filters">
+                        <input type="text" id="filter-stock-search" placeholder="Search FG / Item..." onkeyup="filterReport('rm_stock')">
+                        <select id="filter-stock-status" onchange="filterReport('rm_stock')">
+                            <option value="ALL">All Stock</option>
+                            <option value="IN_STOCK">In Stock</option>
+                            <option value="OUT_OF_STOCK">Out of Stock</option>
+                            <option value="LOW_STOCK">Low Stock (&lt;10)</option>
+                            <option value="ZERO_STOCK">Zero Stock</option>
+                        </select>
+                        <select id="filter-stock-supplier" onchange="filterReport('rm_stock')"><option value="ALL">All Suppliers</option></select>
+                        <button class="btn btn-success btn-sm" onclick="exportReportCSV('rm_stock')"><i class="fas fa-file-excel"></i> Export CSV</button>
+                        <button class="btn btn-primary btn-sm" onclick="printReport('rm_stock')"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                    <div class="table-wrap" id="report-rm_stock-table">
+                        <table>
+                            <thead><tr><th>FG Key</th><th>Item</th><th>Size</th><th>Color</th><th>Supplier</th><th>Rate</th><th>GRN</th><th>Issued</th><th>Stock</th><th>Required</th></tr></thead>
+                            <tbody id="report-rm_stock-body"><tr><td colspan="10" style="text-align:center;color:#62748e;padding:16px;">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+                <!-- Report: RM Ordered -->
+                <div id="report-rm_ordered" class="report-container">
+                    <div class="report-filters">
+                        <input type="text" id="filter-ordered-search" placeholder="Search PO / Supplier..." onkeyup="filterReport('rm_ordered')">
+                        <select id="filter-ordered-status" onchange="filterReport('rm_ordered')">
+                            <option value="ALL">All Status</option>
+                            <option value="DRAFT">Draft</option>
+                            <option value="PROCESSED">Processed</option>
+                            <option value="PARTIAL">Partial</option>
+                            <option value="COMPLETED">Completed</option>
+                        </select>
+                        <select id="filter-ordered-supplier" onchange="filterReport('rm_ordered')"><option value="ALL">All Suppliers</option></select>
+                        <input type="date" id="filter-ordered-from" onchange="filterReport('rm_ordered')" placeholder="From">
+                        <input type="date" id="filter-ordered-to" onchange="filterReport('rm_ordered')" placeholder="To">
+                        <button class="btn btn-success btn-sm" onclick="exportReportCSV('rm_ordered')"><i class="fas fa-file-excel"></i> Export CSV</button>
+                        <button class="btn btn-primary btn-sm" onclick="printReport('rm_ordered')"><i class="fas fa-print"></i> Print</button>
+                    </div>
+                    <div class="table-wrap" id="report-rm_ordered-table">
+                        <table>
+                            <thead><tr><th>PO Token</th><th>Supplier</th><th>Order Date</th><th>FG Keys</th><th>Total Qty</th><th>Total Amount</th><th>Status</th></tr></thead>
+                            <tbody id="report-rm_ordered-body"><tr><td colspan="7" style="text-align:center;color:#62748e;padding:16px;">Loading...</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- MODALS                                      -->
+    <!-- ============================================ -->
+    <div class="modal" id="buyerModal">
+        <div class="modal-box" style="max-width:480px;">
+            <button class="modal-close" onclick="closeBuyerModal()">&times;</button>
+            <h2><i class="fas fa-user-plus"></i> Add Buyer</h2>
+            <div class="form-group"><label>Buyer Name <span class="required">*</span></label><input type="text" id="newBuyerName"></div>
+            <div class="form-group"><label>GST No. <span class="required">*</span></label><input type="text" id="newGstNo"></div>
+            <div class="form-group"><label>Address</label><input type="text" id="newAddress"></div>
+            <div class="form-group"><label>Contact Person</label><input type="text" id="newContactPerson"></div>
+            <div class="form-group"><label>Contact No.</label><input type="tel" id="newContactNo"></div>
+            <div class="form-group"><label>Payment Term</label><input type="text" id="newPaymentTerm"></div>
+            <button class="btn btn-success" style="width:100%;" onclick="addNewBuyer()"><i class="fas fa-save"></i> Add Buyer</button>
+        </div>
+    </div>
+
+    <div class="modal" id="rmSupplierModal">
+        <div class="modal-box" style="max-width:480px;">
+            <button class="modal-close" onclick="closeRMSupplierModal()">&times;</button>
+            <h2><i class="fas fa-truck"></i> Add RM Supplier</h2>
+            <div class="form-group"><label>Supplier Name <span class="required">*</span></label><input type="text" id="newRMSupplierName"></div>
+            <div class="form-group"><label>GST No.</label><input type="text" id="newRMSupplierGST"></div>
+            <div class="form-group"><label>Address</label><input type="text" id="newRMSupplierAddress"></div>
+            <div class="form-group"><label>Contact Person</label><input type="text" id="newRMSupplierContactPerson"></div>
+            <div class="form-group"><label>Contact No.</label><input type="tel" id="newRMSupplierContactNo"></div>
+            <div class="form-group"><label>Payment Term</label><input type="text" id="newRMSupplierPaymentTerm"></div>
+            <button class="btn btn-success" style="width:100%;" onclick="addNewRMSupplier()"><i class="fas fa-save"></i> Add Supplier</button>
+        </div>
+    </div>
+
+    <div class="modal" id="bomModal">
+        <div class="modal-box" style="max-width:98vw;max-height:98vh;">
+            <button class="modal-close" onclick="closeBOMModal()">&times;</button>
+            <h2><i class="fas fa-tools"></i> Assign Raw Materials</h2>
+            <p class="text-muted" id="bomModalFGKey">FG Key: <strong></strong></p>
+            <div style="margin:4px 0;display:flex;gap:4px;flex-wrap:wrap;"><button class="btn btn-success btn-sm" onclick="addBOMRow()"><i class="fas fa-plus"></i> Add Row</button></div>
+            <div class="modal-body" style="max-height:45vh;overflow:auto;">
+                <table id="bomItemsTable" style="width:100%;font-size:9px;">
+                    <thead><tr><th>Item No *</th><th>Item Name *</th><th>Color *</th><th>Size *</th><th>Cons/PC *</th><th>UOM *</th><th>Size Sens</th><th>HSN</th><th>Rate *</th><th>Supplier *</th><th>Lead *</th><th>CGST%</th><th>IGST%</th><th style="width:24px;"></th></tr></thead>
+                    <tbody id="bomItemsBody"></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <span id="requirementPreview" class="text-muted" style="flex:1;font-size:10px;"></span>
+                <button class="btn btn-outline" onclick="closeBOMModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveBOM()"><i class="fas fa-save"></i> Save BOM</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="processPOModal">
+        <div class="modal-box" style="max-width:98vw;max-height:98vh;">
+            <button class="modal-close" onclick="closeProcessPOModal()">&times;</button>
+            <h2><i class="fas fa-file-pen"></i> Process Purchase Order</h2>
+            <p class="text-muted" id="poModalSupplier">Supplier: <strong></strong></p>
+            <p class="text-muted" id="poModalItemCount">Aggregated Items: <strong></strong></p>
+            <div class="form-row" style="margin:6px 0;">
+                <div class="form-group"><label>Supplier Alias</label><input type="text" id="supplierAlias" style="width:100%;padding:3px 6px;border:1px solid #dce3ef;border-radius:4px;font-size:10px;"></div>
+                <div class="form-group"><label>Excess % (0-20)</label><input type="number" id="poExcess" value="0" min="0" max="20" step="0.5" onchange="updatePOItems()"></div>
+            </div>
+            <div class="form-row" style="margin:6px 0;">
+                <div class="form-group" style="display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="allowExtra" style="width:14px;height:14px;">
+                    <label for="allowExtra" style="font-size:10px;font-weight:500;color:#1f2a44;">Add Extra</label>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="text-muted">Selected: <span id="selectedCount">0</span></span>
+                </div>
+            </div>
+            <h4 style="margin:4px 0;">Items</h4>
+            <div class="modal-body" style="max-height:35vh;overflow:auto;">
+                <table style="width:100%;font-size:9px;">
+                    <thead><tr><th style="width:24px;"><input type="checkbox" id="selectAllItems" onchange="toggleAllItems()"></th><th>FG Keys</th><th>Item No</th><th>Item Name</th><th>Size</th><th>Item Size</th><th>Color</th><th>Qty</th><th>UOM</th><th>Rate</th><th>CGST%</th><th>IGST%</th></tr></thead>
+                    <tbody id="poItemsBody"><tr><td colspan="12" style="text-align:center;color:#62748e;">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <span id="poSummary" class="text-muted" style="flex:1;font-size:10px;"></span>
+                <button class="btn btn-outline" onclick="closeProcessPOModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="generatePO()" id="generatePOBtn"><i class="fas fa-file-pdf"></i> Generate PO</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="grnModal">
+        <div class="modal-box" style="max-width:98vw;max-height:98vh;">
+            <button class="modal-close" onclick="closeGRNModal()">&times;</button>
+            <h2><i class="fas fa-clipboard-check"></i> Receive PO: <span id="grnPOToken"></span></h2>
+            <p class="text-muted" id="grnSupplier">Supplier: <strong></strong></p>
+            <div class="form-row" style="margin:6px 0;">
+                <div class="form-group"><label>Invoice No.</label><input type="text" id="grnInvoiceNo" placeholder="Enter invoice number"></div>
+                <div style="display:flex;gap:4px;align-items:center;">
+                    <button class="btn btn-danger btn-sm" onclick="cancelGRNFromModal()"><i class="fas fa-times"></i> Cancel GRN</button>
+                </div>
+            </div>
+            <div class="modal-body" style="max-height:40vh;overflow:auto;">
+                <div id="grnFGGroupContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <span id="grnSummary" class="text-muted" style="flex:1;font-size:10px;"></span>
+                <button class="btn btn-outline" onclick="closeGRNModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveGRN()"><i class="fas fa-save"></i> Receive</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="shortfallModal">
+        <div class="modal-box" style="max-width:98vw;max-height:98vh;">
+            <button class="modal-close" onclick="closeShortfallModal()">&times;</button>
+            <h2><i class="fas fa-exclamation-triangle"></i> Pending Shortfalls</h2>
+            <div id="shortfallContainer"><div class="text-muted" style="text-align:center;padding:20px;">Loading...</div></div>
+        </div>
+    </div>
+
+    <div class="modal" id="issueRMModal">
+        <div class="modal-box" style="max-width:98vw;max-height:98vh;">
+            <button class="modal-close" onclick="closeIssueRMModal()">&times;</button>
+            <h2><i class="fas fa-arrow-right-from-bracket"></i> Issue Raw Materials</h2>
+            <p class="text-muted" id="issueModalFGKey">FG Key: <strong></strong></p>
+            <p class="text-muted" id="issueModalStatus">Status: <strong></strong></p>
+            <div class="issue-buffer-note" style="background:#f8faff;padding:6px 10px;border-radius:6px;margin:6px 0;font-size:10px;"><i class="fas fa-info-circle"></i> Max = Required × 1.05</div>
+            <div class="modal-body" style="max-height:40vh;overflow:auto;">
+                <table style="width:100%;font-size:9px;">
+                    <thead><tr><th>Item</th><th>Size</th><th>Item Size</th><th>Required</th><th>GRN</th><th>Issued</th><th>Available</th><th>Issuing</th></tr></thead>
+                    <tbody id="issueRMItemsBody"><tr><td colspan="8" style="text-align:center;color:#62748e;">Loading...</td></tr></tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <span id="issueSummary" class="text-muted" style="flex:1;font-size:10px;"></span>
+                <button class="btn btn-outline" onclick="closeIssueRMModal()">Cancel</button>
+                <button class="btn btn-success" onclick="saveIssueRM()"><i class="fas fa-check"></i> Issue</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="poPreviewModal">
+        <div class="modal-box full">
+            <div style="position:sticky;top:0;background:white;padding:4px 12px;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;z-index:10;">
+                <span><strong><i class="fas fa-file-pdf" style="color:#2a6df4;"></i> PO Preview</strong> <span id="poPreviewToken" class="text-muted"></span></span>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                    <button class="btn btn-outline btn-sm" onclick="closePOPreview()">Close</button>
+                    <button class="btn btn-success btn-sm" onclick="savePOAction()"><i class="fas fa-save"></i> Save</button>
+                    <button class="btn btn-primary btn-sm" onclick="processPOFromPreview()"><i class="fas fa-check"></i> Process</button>
+                </div>
+            </div>
+            <iframe id="poPreviewFrame" class="po-preview-iframe"></iframe>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,1460 @@
+// ==============================================================
+// API Client - FastAPI Backend
+// ==============================================================
+
+const API = {
+    baseUrl: '',
+
+    async call(endpoint, method = 'GET', data = null) {
+        const url = `${this.baseUrl}${endpoint}`;
+        const options = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+            },
+        };
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        try {
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
+        }
+    },
+
+    // Master Data
+    getBuyers() { return this.call('/master/buyers'); },
+    getBuyerDetails(name) { return this.call(`/master/buyers/${encodeURIComponent(name)}`); },
+    getRMSuppliers() { return this.call('/master/suppliers'); },
+    getRMSupplierDetails(name) { return this.call(`/master/suppliers/${encodeURIComponent(name)}`); },
+    addBuyer(data) { return this.call('/master/buyers', 'POST', data); },
+    addRMSupplier(data) { return this.call('/master/suppliers', 'POST', data); },
+
+    // Buyer Order
+    generateFGSerial() { return this.call('/buyer-order/fg-serial'); },
+    generateOrderGrid(data) { return this.call('/buyer-order/generate-grid', 'POST', data); },
+    saveOrder(data) { return this.call('/buyer-order/save', 'POST', data); },
+
+    // BOM
+    getBOMOrders() { return this.call('/bom/orders'); },
+    getBOMData(fgKey) { return this.call(`/bom/${encodeURIComponent(fgKey)}`); },
+    saveBOM(data) { return this.call('/bom/save', 'POST', data); },
+
+    // RM Order
+    getRMOrders() { return this.call('/rm-order/orders'); },
+    generatePO(data) { return this.call('/rm-order/generate-po', 'POST', data); },
+    processPO(poToken) { return this.call('/rm-order/process', 'POST', { po_token: poToken }); },
+    savePO(poToken) { return this.call('/rm-order/save', 'POST', { po_token: poToken }); },
+
+    // GRN
+    getGRNOrders() { return this.call('/grn/orders'); },
+    getPendingShortfalls() { return this.call('/grn/shortfalls'); },
+    saveGRN(data) { return this.call('/grn/save', 'POST', data); },
+    cancelGRN(poToken, invoiceNo) { return this.call('/grn/cancel', 'POST', { po_token: poToken, invoice_no: invoiceNo }); },
+
+    // Issue RM
+    getIssueRMOrders() { return this.call('/issue-rm/orders'); },
+    getIssuableItems(fgKey) { return this.call(`/issue-rm/${encodeURIComponent(fgKey)}/items`); },
+    saveIssueRM(data) { return this.call('/issue-rm/save', 'POST', data); },
+
+    // Reports
+    getReportData(reportType, filters) { return this.call('/reports/data', 'POST', { reportType, filters }); },
+    getReportFilters() { return this.call('/reports/filters'); },
+
+    // Utilities
+    debugFGStatus(fgKey) { return this.call(`/utils/debug/fg-status?fg_key=${encodeURIComponent(fgKey)}`); },
+    cancelStage(data) { return this.call('/utils/cancel/stage', 'POST', data); },
+    cancelOrder(data) { return this.call('/utils/cancel/order', 'POST', data); },
+    getWorkflow() { return this.call('/utils/workflow'); },
+    getSettings() { return this.call('/utils/settings'); },
+};
+
+// ==============================================================
+// THEME TOGGLE
+// ==============================================================
+
+function toggleTheme() {
+    const html = document.documentElement;
+    const icon = document.getElementById('themeIcon');
+    const currentTheme = html.getAttribute('data-theme');
+    
+    if (currentTheme === 'dark') {
+        html.removeAttribute('data-theme');
+        icon.className = 'fas fa-moon';
+        localStorage.setItem('theme', 'light');
+    } else {
+        html.setAttribute('data-theme', 'dark');
+        icon.className = 'fas fa-sun';
+        localStorage.setItem('theme', 'dark');
+    }
+}
+
+function loadTheme() {
+    const savedTheme = localStorage.getItem('theme');
+    const html = document.documentElement;
+    const icon = document.getElementById('themeIcon');
+    
+    if (savedTheme === 'dark') {
+        html.setAttribute('data-theme', 'dark');
+        if (icon) icon.className = 'fas fa-sun';
+    } else {
+        html.removeAttribute('data-theme');
+        if (icon) icon.className = 'fas fa-moon';
+    }
+}
+
+// ==============================================================
+// SIDE PANEL NAVIGATION
+// ==============================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Load theme
+    loadTheme();
+    
+    // INIT - load default data
+    loadBuyers();
+    setDefaultDates();
+    generateAutoSerial();
+    console.log("✅ Sneha Creations ERP v1.0 - FastAPI + PostgreSQL");
+    
+    // Side panel navigation
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const module = this.dataset.module;
+            
+            // Update nav items
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            this.classList.add('active');
+            
+            // Update module content
+            document.querySelectorAll('.module-content').forEach(c => c.classList.remove('active'));
+            const el = document.getElementById(`module-${module}`);
+            if (el) el.classList.add('active');
+            
+            // Load module data
+            if (module === 'BUYER_ORDER') { 
+                loadBuyers(); 
+                setDefaultDates(); 
+                generateAutoSerial(); 
+                document.getElementById('gridSection').style.display = 'none'; 
+            } else if (module === 'BOM') refreshBOMOrders();
+            else if (module === 'RM_ORDER') refreshRMOrders();
+            else if (module === 'GRN') refreshGRNOrders();
+            else if (module === 'ISSUE_RM') refreshIssueRMOrders();
+            else if (module === 'REPORTS') loadReports();
+        });
+    });
+});
+
+// ==============================================================
+// TOAST
+// ==============================================================
+function showToast(msg, type = '') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + type;
+    clearTimeout(t._timeout);
+    t._timeout = setTimeout(() => t.className = 'toast', 4000);
+}
+
+// ==============================================================
+// FILTER FUNCTION
+// ==============================================================
+function filterTable(searchInputId, containerId, rowSelector = "tr") {
+    const input = document.getElementById(searchInputId);
+    if (!input) return;
+    const filter = input.value.toLowerCase();
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (container.tagName === "TBODY") {
+        const rows = container.querySelectorAll("tr");
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(filter) ? "" : "none";
+        });
+        return;
+    }
+    const rows = container.querySelectorAll(rowSelector);
+    if (rows.length === 0 && container.children.length > 0) {
+        const cards = container.querySelectorAll(".po-card");
+        cards.forEach(card => {
+            const text = card.textContent.toLowerCase();
+            card.style.display = text.includes(filter) ? "" : "none";
+        });
+        return;
+    }
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? "" : "none";
+    });
+}
+// STATE
+// ==============================================================
+const ERP_STATE = {
+    currentFGOrderSerial: null,
+    gridData: [],
+    bomCurrentFGKey: null,
+    bomItemsData: [],
+    supplierOptions: [],
+    rmOrdersData: [],
+    selectedGroups: new Set(),
+    currentPOToken: null,
+    grnData: [],
+    shortfallData: [],
+    issueRMData: [],
+    buyerName: '', buyerGST: '', buyerOrderNo: '', orderDate: '', deliveryDate: '', leadTime: 0, noOfFG: 0,
+    isBomModalOpen: false,
+    reportData: { buyer_status: [], rm_stock: [], rm_ordered: [] },
+    reportFilters: { suppliers: [], fgKeys: [] },
+    currentSupplierItems: [],
+    groupMap: {},
+    groupItemsMap: {},
+    currentGRNData: null
+};
+
+// ==============================================================
+// BUYER ORDER
+// ==============================================================
+async function loadBuyers() {
+    try {
+        const buyers = await API.getBuyers();
+        const sel = document.getElementById('buyerName');
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Select Buyer</option>';
+        if (buyers && buyers.length) buyers.forEach(b => sel.innerHTML += `<option value="${b}">${b}</option>`);
+        if (cur) sel.value = cur;
+        ERP_STATE.buyerName = sel.value;
+    } catch (e) {
+        showToast('Error loading buyers: ' + e.message, 'error');
+    }
+}
+
+async function loadBuyerDetails() {
+    const name = document.getElementById('buyerName').value;
+    ERP_STATE.buyerName = name;
+    if (!name) { document.getElementById('buyerGST').value = ''; ERP_STATE.buyerGST = ''; return; }
+    try {
+        const b = await API.getBuyerDetails(name);
+        if (b) { document.getElementById('buyerGST').value = b.gst_no || ''; ERP_STATE.buyerGST = b.gst_no || ''; }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function openBuyerModal() { document.getElementById('buyerModal').classList.add('active'); ['newBuyerName', 'newGstNo', 'newAddress', 'newContactPerson', 'newContactNo', 'newPaymentTerm'].forEach(id => document.getElementById(id).value = ''); }
+function closeBuyerModal() { document.getElementById('buyerModal').classList.remove('active'); }
+
+async function addNewBuyer() {
+    const data = { name: document.getElementById('newBuyerName').value.trim(), gst_no: document.getElementById('newGstNo').value.trim(), address: document.getElementById('newAddress').value.trim(), contact_person: document.getElementById('newContactPerson').value.trim(), contact_no: document.getElementById('newContactNo').value.trim(), payment_term: document.getElementById('newPaymentTerm').value.trim() };
+    if (!data.name || !data.gst_no) { showToast('Buyer name and GST are required', 'error'); return; }
+    try {
+        const r = await API.addBuyer(data);
+        if (r.success) { showToast(r.message, 'success'); closeBuyerModal(); loadBuyers(); document.getElementById('buyerName').value = data.name; loadBuyerDetails(); } else showToast(r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function setDefaultDates() {
+    const today = new Date();
+    document.getElementById('orderDate').value = today.toISOString().split('T')[0];
+    ERP_STATE.orderDate = document.getElementById('orderDate').value;
+    const d = new Date(today); d.setDate(today.getDate() + 15);
+    document.getElementById('deliveryDate').value = d.toISOString().split('T')[0];
+    ERP_STATE.deliveryDate = document.getElementById('deliveryDate').value;
+    calculateLeadTime();
+}
+
+function calculateLeadTime() {
+    const order = document.getElementById('orderDate').value;
+    const delivery = document.getElementById('deliveryDate').value;
+    ERP_STATE.orderDate = order;
+    ERP_STATE.deliveryDate = delivery;
+    if (order && delivery) { const diff = Math.ceil((new Date(delivery) - new Date(order)) / (1000 * 60 * 60 * 24)); document.getElementById('leadTime').value = diff > 0 ? diff : 0; ERP_STATE.leadTime = diff > 0 ? diff : 0; }
+}
+
+async function generateAutoSerial() {
+    try {
+        const s = await API.generateFGSerial();
+        document.getElementById('fgOrderSerial').value = s || 'FG-000000-001';
+        ERP_STATE.currentFGOrderSerial = s || 'FG-000000-001';
+    } catch (e) {
+        document.getElementById('fgOrderSerial').value = 'FG-000000-001';
+        ERP_STATE.currentFGOrderSerial = 'FG-000000-001';
+    }
+}
+
+async function generateGrid() {
+    ERP_STATE.buyerName = document.getElementById('buyerName').value;
+    ERP_STATE.buyerGST = document.getElementById('buyerGST').value;
+    ERP_STATE.buyerOrderNo = document.getElementById('buyerOrderNo').value.trim();
+    ERP_STATE.orderDate = document.getElementById('orderDate').value;
+    ERP_STATE.deliveryDate = document.getElementById('deliveryDate').value;
+    ERP_STATE.leadTime = parseInt(document.getElementById('leadTime').value) || 0;
+    ERP_STATE.noOfFG = parseInt(document.getElementById('noOfFG').value) || 0;
+    if (!ERP_STATE.buyerName || !ERP_STATE.buyerOrderNo || !ERP_STATE.orderDate || !ERP_STATE.deliveryDate) { showToast('Please fill all required fields', 'error'); return; }
+    if (ERP_STATE.noOfFG < 1) { showToast('Please enter number of FG', 'error'); return; }
+    const orderData = { buyer_name: ERP_STATE.buyerName, buyer_gst: ERP_STATE.buyerGST, buyer_order_no: ERP_STATE.buyerOrderNo, order_date: ERP_STATE.orderDate, delivery_date: ERP_STATE.deliveryDate, lead_time: ERP_STATE.leadTime, no_of_fg: ERP_STATE.noOfFG };
+    showToast('Generating grid...', 'info');
+    try {
+        const r = await API.generateOrderGrid(orderData);
+        if (r.success) { ERP_STATE.currentFGOrderSerial = r.fg_order_serial; document.getElementById('fgOrderSerial').value = r.fg_order_serial; ERP_STATE.gridData = r.grid_data; renderGrid(r.grid_data, r.fg_order_serial); document.getElementById('gridSection').style.display = 'block'; showToast('Grid ready!', 'success'); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function renderGrid(gridData, fgOrderSerial) {
+    if (!gridData || !gridData.length) { showToast('No data', 'error'); return; }
+    const defaultSizes = [26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54];
+    const sizeHeaders = defaultSizes.slice(0, gridData[0].length - 3);
+    document.getElementById('gridOrderSerial').textContent = `Order: ${fgOrderSerial}`;
+    let h = '<tr><th>#</th><th>FG Design No</th><th>FG Color No</th>'; sizeHeaders.forEach(s => h += `<th>${s}</th>`); h += '</tr>';
+    document.getElementById('gridHeaders').innerHTML = h;
+    let b = '';
+    gridData.forEach((row, idx) => {
+        b += `<tr><td><strong>${idx + 1}</strong></td>`;
+        b += `<td><input type="text" value="${row[1] || ''}" data-row="${idx}" data-col="1" placeholder="Design" style="min-width:70px;"></td>`;
+        b += `<td><input type="text" value="${row[2] || ''}" data-row="${idx}" data-col="2" placeholder="Color" style="min-width:70px;"></td>`;
+        for (let i = 3; i < row.length; i++) { const val = (row[i] === 0 || row[i] === '' || row[i] === null) ? '' : row[i]; b += `<td><input type="number" value="${val}" data-row="${idx}" data-col="${i}" placeholder="0" style="width:42px;"></td>`; }
+        b += '</tr>';
+    });
+    document.getElementById('gridBody').innerHTML = b;
+}
+
+function addSizeColumn() {
+    const size = prompt('Enter size value:'); if (!size) return;
+    const num = parseInt(size); if (isNaN(num) || num < 1) { showToast('Invalid size', 'error'); return; }
+    const hRow = document.querySelector('#gridHeaders tr'); if (hRow) { const th = document.createElement('th'); th.textContent = num; hRow.appendChild(th); }
+    document.querySelectorAll('#gridBody tr').forEach(row => { const td = document.createElement('td'); td.innerHTML = `<input type="number" value="" placeholder="0" style="width:42px;">`; row.appendChild(td); });
+    showToast(`Size ${num} added`, 'success');
+}
+
+async function saveOrder() {
+    const rows = document.querySelectorAll('#gridBody tr');
+    const allData = [];
+    const buyerName = ERP_STATE.buyerName || document.getElementById('buyerName').value || 'Unknown';
+    const buyerOrderNo = ERP_STATE.buyerOrderNo || document.getElementById('buyerOrderNo').value || 'N/A';
+    const orderDate = ERP_STATE.orderDate || document.getElementById('orderDate').value || new Date().toISOString().split('T')[0];
+    const createdDate = new Date().toISOString();
+    rows.forEach((row, idx) => {
+        const inputs = row.querySelectorAll('input');
+        const rowData = [ERP_STATE.currentFGOrderSerial];
+        rowData.push(inputs[0] ? inputs[0].value.trim() : '');
+        rowData.push(inputs[1] ? inputs[1].value.trim() : '');
+        for (let i = 2; i < inputs.length; i++) { const val = inputs[i].value; rowData.push(val === '' ? 0 : parseFloat(val) || 0); }
+        rowData.push(buyerName); rowData.push(buyerOrderNo); rowData.push(orderDate); rowData.push(createdDate);
+        allData.push(rowData);
+    });
+    for (let i = 0; i < allData.length; i++) { if (!allData[i][1] || !allData[i][2]) { showToast(`Row ${i + 1}: Design and Color are required`, 'error'); return; } }
+    if (!buyerName || buyerName === 'Unknown') { showToast('Please select a Buyer', 'error'); return; }
+    if (!buyerOrderNo || buyerOrderNo === 'N/A') { showToast('Please enter Buyer Order No', 'error'); return; }
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+        const r = await API.saveOrder({ fg_order_serial: ERP_STATE.currentFGOrderSerial, grid_data: allData });
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Order';
+        if (r.success) { showToast('Order saved!', 'success'); document.getElementById('gridSection').style.display = 'none'; document.getElementById('buyerOrderNo').value = ''; document.getElementById('noOfFG').value = ''; ERP_STATE.buyerOrderNo = ''; ERP_STATE.noOfFG = 0; generateAutoSerial(); setDefaultDates(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save Order';
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// BOM
+// ==============================================================
+async function refreshBOMOrders() {
+    showToast('Loading orders...', 'info');
+    try {
+        const orders = await API.getBOMOrders();
+        renderBOMOrders(orders);
+        showToast(orders && orders.length ? 'Orders loaded' : 'No pending orders', orders && orders.length ? 'success' : 'info');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function renderBOMOrders(orders) {
+    const tb = document.getElementById('bomOrderBody');
+    if (!orders || orders.length === 0) { tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">No pending orders</td></tr>'; return; }
+    let html = '';
+    orders.forEach(o => {
+        const date = o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '—';
+        const reqStatus = o.requirementStatus || 'PENDING';
+        const statusBadge = reqStatus === 'COMPLETED' ? 'success' : reqStatus === 'PENDING' ? 'warning' : 'info';
+        html += `<tr><td><strong>${o.fgKey || '—'}</strong></td><td>${o.buyerOrderNo || '—'}</td><td>${date}</td>
+            <td>
+                <button class="btn btn-primary btn-sm" onclick="openBOMModal('${o.fgKey}')"><i class="fas fa-pencil-alt"></i> Assign RM</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelStageAction('${o.fgKey}','BOM')"><i class="fas fa-undo"></i> Cancel</button>
+                <span class="badge-status ${statusBadge}">${reqStatus}</span>
+            </td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+}
+
+async function cancelStageAction(fgKey, stage) {
+    if (!confirm(`⚠️ Are you sure you want to CANCEL ${stage} for FG: ${fgKey}?`)) return;
+    showToast(`Cancelling ${stage}...`, 'info');
+    try {
+        const r = await API.cancelStage({ fgKey, targetStage: stage });
+        if (r.success) { showToast(r.message, 'success'); refreshBOMOrders(); refreshRMOrders(); refreshGRNOrders(); refreshIssueRMOrders(); }
+        else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function openBOMModal(fgKey) {
+    ERP_STATE.bomCurrentFGKey = fgKey;
+    ERP_STATE.isBomModalOpen = true;
+    document.getElementById('bomModalFGKey').innerHTML = `FG Key: <strong>${fgKey}</strong>`;
+    try {
+        const suppliers = await API.getRMSuppliers();
+        ERP_STATE.supplierOptions = suppliers;
+        const bomData = await API.getBOMData(fgKey);
+        if (bomData && bomData.items && bomData.items.length > 0) {
+            ERP_STATE.bomItemsData = bomData.items.map(item => ({
+                itemNo: item.itemNo || '',
+                itemName: item.itemName || '',
+                itemColor: item.itemColor || '',
+                itemSize: item.itemSize || '',
+                consumption: item.consumption || '',
+                uom: item.uom || '',
+                sizeSensitive: item.sizeSensitive || 'No',
+                hsn: item.hsn || '',
+                rate: item.rate || '',
+                supplier: item.supplier || '',
+                leadtime: item.leadtime || '',
+                cgst: item.cgst || '',
+                igst: item.igst || ''
+            }));
+        } else {
+            ERP_STATE.bomItemsData = [];
+        }
+        while (ERP_STATE.bomItemsData.length < 10) addBOMRow(true);
+        renderBOMItems();
+        document.getElementById('bomModal').classList.add('active');
+    } catch (e) {
+        showToast('Error loading BOM: ' + e.message, 'error');
+        ERP_STATE.bomItemsData = [];
+        while (ERP_STATE.bomItemsData.length < 10) addBOMRow(true);
+        renderBOMItems();
+        document.getElementById('bomModal').classList.add('active');
+    }
+}
+
+function closeBOMModal() { document.getElementById('bomModal').classList.remove('active'); ERP_STATE.bomCurrentFGKey = null; ERP_STATE.isBomModalOpen = false; }
+
+function addBOMRow(silent = false) {
+    ERP_STATE.bomItemsData.push({ itemNo: '', itemName: '', itemColor: '', itemSize: '', consumption: '', uom: '', sizeSensitive: 'No', hsn: '', rate: '', supplier: '', leadtime: '', cgst: '', igst: '' });
+    if (!silent) renderBOMItems();
+}
+
+function removeBOMRow(idx) { if (ERP_STATE.bomItemsData.length <= 1) { showToast('Cannot remove last row', 'error'); return; } ERP_STATE.bomItemsData.splice(idx, 1); renderBOMItems(); }
+
+function renderBOMItems() {
+    const tb = document.getElementById('bomItemsBody');
+    if (ERP_STATE.bomItemsData.length === 0) { tb.innerHTML = '<tr><td colspan="14" style="text-align:center;color:#62748e;">No items</td></tr>'; return; }
+    let html = '';
+    ERP_STATE.bomItemsData.forEach((item, idx) => {
+        html += `<tr data-index="${idx}"><td><input type="text" value="${item.itemNo}" data-field="itemNo" class="required-field"></td>
+            <td><input type="text" value="${item.itemName}" data-field="itemName" class="required-field"></td>
+            <td><input type="text" value="${item.itemColor}" data-field="itemColor" class="required-field"></td>
+            <td><input type="text" value="${item.itemSize}" data-field="itemSize" class="required-field"></td>
+            <td><input type="number" value="${item.consumption}" data-field="consumption" class="required-field" step="0.01"></td>
+            <td><input type="text" value="${item.uom}" data-field="uom" class="required-field"></td>
+            <td><select data-field="sizeSensitive"><option value="No" ${item.sizeSensitive === 'No' ? 'selected' : ''}>No</option><option value="Yes" ${item.sizeSensitive === 'Yes' ? 'selected' : ''}>Yes</option></select></td>
+            <td><input type="text" value="${item.hsn}" data-field="hsn"></td>
+            <td><input type="number" value="${item.rate}" data-field="rate" class="required-field" step="0.01"></td>
+            <td><select data-field="supplier" class="required-field"><option value="">Select</option>${ERP_STATE.supplierOptions.map(s => `<option value="${s}" ${s === item.supplier ? 'selected' : ''}>${s}</option>`).join('')}<option value="__ADD__">+ Add New</option></select></td>
+            <td><input type="number" value="${item.leadtime}" data-field="leadtime" class="required-field"></td>
+            <td><input type="number" value="${item.cgst}" data-field="cgst" step="0.01"></td>
+            <td><input type="number" value="${item.igst}" data-field="igst" step="0.01"></td>
+            <td><button class="btn btn-danger btn-xs" onclick="removeBOMRow(${idx})"><i class="fas fa-trash"></i></button></td></tr>`;
+    });
+    tb.innerHTML = html;
+    tb.querySelectorAll('input, select').forEach(el => {
+        el.addEventListener('change', function () {
+            const tr = this.closest('tr');
+            const idx = parseInt(tr.dataset.index);
+            const field = this.dataset.field;
+            if (!isNaN(idx) && field) ERP_STATE.bomItemsData[idx][field] = this.value;
+        });
+        if (el.tagName === 'SELECT' && el.dataset.field === 'supplier') {
+            el.addEventListener('change', function () {
+                const tr = this.closest('tr');
+                const idx = parseInt(tr.dataset.index);
+                if (this.value === '__ADD__') {
+                    const currentBOMState = JSON.stringify(ERP_STATE.bomItemsData);
+                    openRMSupplierModal(newSupplier => {
+                        if (newSupplier) {
+                            ERP_STATE.supplierOptions.push(newSupplier);
+                            const savedState = JSON.parse(currentBOMState);
+                            ERP_STATE.bomItemsData = savedState;
+                            renderBOMItems();
+                            setTimeout(() => {
+                                const sel = document.querySelector(`#bomItemsBody tr[data-index="${idx}"] select[data-field="supplier"]`);
+                                if (sel) sel.value = newSupplier;
+                                ERP_STATE.bomItemsData[idx].supplier = newSupplier;
+                            }, 50);
+                        }
+                    });
+                }
+            });
+        }
+    });
+}
+
+function validateBOMItems() {
+    for (let i = 0; i < ERP_STATE.bomItemsData.length; i++) {
+        const item = ERP_STATE.bomItemsData[i];
+        if (!item.itemNo?.trim()) { showToast(`Row ${i + 1}: Item No required`, 'error'); return false; }
+        if (!item.itemName?.trim()) { showToast(`Row ${i + 1}: Item Name required`, 'error'); return false; }
+        if (!item.itemColor?.trim()) { showToast(`Row ${i + 1}: Item Color required`, 'error'); return false; }
+        if (!item.itemSize?.trim()) { showToast(`Row ${i + 1}: Item Size required`, 'error'); return false; }
+        if (!item.consumption || parseFloat(item.consumption) <= 0) { showToast(`Row ${i + 1}: Consumption > 0 required`, 'error'); return false; }
+        if (!item.uom?.trim()) { showToast(`Row ${i + 1}: UOM required`, 'error'); return false; }
+        if (!item.rate || parseFloat(item.rate) <= 0) { showToast(`Row ${i + 1}: Rate > 0 required`, 'error'); return false; }
+        if (!item.supplier?.trim()) { showToast(`Row ${i + 1}: Supplier required`, 'error'); return false; }
+        if (!item.leadtime || parseFloat(item.leadtime) <= 0) { showToast(`Row ${i + 1}: Leadtime > 0 required`, 'error'); return false; }
+    }
+    return true;
+}
+
+async function saveBOM() {
+    if (!validateBOMItems()) return;
+    const payload = {
+        fg_key: ERP_STATE.bomCurrentFGKey,
+        items: ERP_STATE.bomItemsData.map(item => ({
+            item_no: item.itemNo.trim(),
+            item_name: item.itemName.trim(),
+            item_color: item.itemColor.trim(),
+            item_size: item.itemSize.trim(),
+            consumption: parseFloat(item.consumption),
+            uom: item.uom.trim(),
+            size_sensitive: item.sizeSensitive,
+            hsn: item.hsn,
+            rate: parseFloat(item.rate),
+            supplier: item.supplier.trim(),
+            leadtime: parseFloat(item.leadtime),
+            cgst: parseFloat(item.cgst) || 0,
+            igst: parseFloat(item.igst) || 0
+        }))
+    };
+    showToast('Saving BOM...', 'info');
+    try {
+        const r = await API.saveBOM(payload);
+        if (r.success) { showToast(r.message, 'success'); closeBOMModal(); refreshBOMOrders(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// RM SUPPLIER MODAL
+// ==============================================================
+let rmSupplierCb = null;
+let storedBOMState = null;
+
+function openRMSupplierModal(cb) {
+    storedBOMState = { items: JSON.parse(JSON.stringify(ERP_STATE.bomItemsData)), fgKey: ERP_STATE.bomCurrentFGKey, isOpen: ERP_STATE.isBomModalOpen };
+    rmSupplierCb = cb || null;
+    document.getElementById('rmSupplierModal').classList.add('active');
+    ['newRMSupplierName', 'newRMSupplierGST', 'newRMSupplierAddress', 'newRMSupplierContactPerson', 'newRMSupplierContactNo', 'newRMSupplierPaymentTerm'].forEach(id => document.getElementById(id).value = '');
+}
+
+function closeRMSupplierModal() {
+    document.getElementById('rmSupplierModal').classList.remove('active');
+    if (storedBOMState) {
+        ERP_STATE.bomItemsData = storedBOMState.items;
+        ERP_STATE.bomCurrentFGKey = storedBOMState.fgKey;
+        ERP_STATE.isBomModalOpen = storedBOMState.isOpen;
+        if (ERP_STATE.isBomModalOpen && document.getElementById('bomModal').classList.contains('active')) { renderBOMItems(); }
+        storedBOMState = null;
+    }
+}
+
+async function addNewRMSupplier() {
+    const data = { name: document.getElementById('newRMSupplierName').value.trim(), gst_no: document.getElementById('newRMSupplierGST').value.trim(), address: document.getElementById('newRMSupplierAddress').value.trim(), contact_person: document.getElementById('newRMSupplierContactPerson').value.trim(), contact_no: document.getElementById('newRMSupplierContactNo').value.trim(), payment_term: document.getElementById('newRMSupplierPaymentTerm').value.trim() };
+    if (!data.name) { showToast('Supplier name required', 'error'); return; }
+    try {
+        const r = await API.addRMSupplier(data);
+        if (r.success) { showToast('Supplier added', 'success'); closeRMSupplierModal(); if (rmSupplierCb) { rmSupplierCb(data.name); rmSupplierCb = null; } } else showToast(r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// RM ORDER
+// ==============================================================
+async function refreshRMOrders() {
+    showToast('Loading RM orders...', 'info');
+    try {
+        const orders = await API.getRMOrders();
+        ERP_STATE.rmOrdersData = orders || [];
+        renderRMOrders(ERP_STATE.rmOrdersData);
+        showToast(ERP_STATE.rmOrdersData && ERP_STATE.rmOrdersData.length ? 'RM orders loaded' : 'No RM orders found', ERP_STATE.rmOrdersData && ERP_STATE.rmOrdersData.length ? 'success' : 'info');
+    } catch (e) {
+        showToast('Error loading RM orders: ' + e.message, 'error');
+    }
+}
+
+function renderRMOrders(orders) {
+    const container = document.getElementById('rmOrderBody');
+    if (!orders || orders.length === 0) { container.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px;">No RM orders found. Complete BOM first.</div>'; return; }
+    let html = '';
+    orders.forEach((supplierData) => {
+        const itemCount = supplierData.items ? supplierData.items.length : 0;
+        const totalQty = supplierData.totalQuantity || 0;
+        const fgKeys = supplierData.fgKeys ? supplierData.fgKeys.join(', ') : 'N/A';
+        html += `<div class="po-card"><div class="po-card-header"><span class="po-card-title">${supplierData.supplier || '—'}</span><div style="display:flex;gap:4px;flex-wrap:wrap;"><span class="badge-status info">Items: ${itemCount}</span><span class="badge-status primary">Qty: ${totalQty.toFixed(2)}</span></div></div><div class="po-card-meta">FG Keys: ${fgKeys}</div><div style="margin-top:6px;"><button class="btn btn-primary btn-sm" onclick="openProcessPOModal('${supplierData.supplier}')"><i class="fas fa-file-pen"></i> Process PO</button></div></div>`;
+    });
+    container.innerHTML = html;
+}
+
+function openProcessPOModal(supplier) {
+    const supplierData = ERP_STATE.rmOrdersData.find(o => o.supplier === supplier);
+    if (!supplierData) { showToast('Supplier not found', 'error'); return; }
+    ERP_STATE.currentSupplierItems = supplierData.items || [];
+    ERP_STATE.selectedGroups = new Set();
+    ERP_STATE.groupMap = {};
+    ERP_STATE.groupItemsMap = {};
+    ERP_STATE.currentSupplierItems.forEach((item) => {
+        const aggKey = `${item.itemName}|${item.garmentSize || 'ALL'}|${item.color || ''}|${item.itemSize || ''}`;
+        if (!ERP_STATE.groupMap[aggKey]) {
+            ERP_STATE.groupMap[aggKey] = {
+                itemNo: item.itemNo,
+                itemName: item.itemName,
+                garmentSize: item.garmentSize || 'ALL',
+                color: item.color || '',
+                itemSize: item.itemSize || '',
+                totalBalance: 0,
+                uom: item.uom || 'PCS',
+                rate: item.rate || 0,
+                cgst: item.cgst || 0,
+                igst: item.igst || 0,
+                hsn: item.hsn || '',
+                fgKeys: [],
+                originalIndices: []
+            };
+            ERP_STATE.groupItemsMap[aggKey] = [];
+        }
+        ERP_STATE.groupMap[aggKey].totalBalance += (item.balanceToOrder || item.requiredQty || 0);
+        ERP_STATE.groupMap[aggKey].fgKeys.push(item.fgKey);
+        ERP_STATE.groupMap[aggKey].originalIndices.push(ERP_STATE.currentSupplierItems.indexOf(item));
+        ERP_STATE.groupItemsMap[aggKey].push(item);
+    });
+    Object.keys(ERP_STATE.groupMap).forEach(key => ERP_STATE.selectedGroups.add(key));
+    document.getElementById('poModalSupplier').innerHTML = `Supplier: <strong>${supplier}</strong>`;
+    document.getElementById('poModalItemCount').innerHTML = `Aggregated Items: <strong>${Object.keys(ERP_STATE.groupMap).length}</strong>`;
+    document.getElementById('poSummary').textContent = '';
+    document.getElementById('selectedCount').textContent = '0';
+    document.getElementById('supplierAlias').value = supplier;
+    renderPOItems();
+    updatePOItemCount();
+    document.getElementById('processPOModal').classList.add('active');
+}
+
+function renderPOItems() {
+    const tb = document.getElementById('poItemsBody');
+    const groupKeys = Object.keys(ERP_STATE.groupMap);
+    if (groupKeys.length === 0) { tb.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#62748e;">No items</td></tr>'; return; }
+    let html = '';
+    groupKeys.forEach((aggKey) => {
+        const group = ERP_STATE.groupMap[aggKey];
+        const isSelected = ERP_STATE.selectedGroups.has(aggKey);
+        const cgst = group.cgst || 0;
+        const igst = group.igst || 0;
+        const balance = group.totalBalance;
+        const fgKeysDisplay = group.fgKeys.join(', ');
+        html += `<tr><td><input type="checkbox" class="group-checkbox" data-group="${aggKey}" ${isSelected ? 'checked' : ''} onchange="toggleGroup('${aggKey}')"></td>
+            <td style="font-size:8px;color:#62748e;">${fgKeysDisplay}</td>
+            <td>${group.itemNo || ''}</td><td>${group.itemName || ''}</td>
+            <td>${group.garmentSize || 'ALL'}</td><td>${group.itemSize || ''}</td>
+            <td>${group.color || ''}</td><td>${balance.toFixed(2)}</td>
+            <td>${group.uom || 'PCS'}</td><td>₹${(group.rate || 0).toFixed(2)}</td>
+            <td><input type="number" class="group-cgst" data-group="${aggKey}" value="${cgst}" step="0.01" style="width:40px;" onchange="updateGroupCGST('${aggKey}', this.value)"></td>
+            <td><input type="number" class="group-igst" data-group="${aggKey}" value="${igst}" step="0.01" style="width:40px;" onchange="updateGroupIGST('${aggKey}', this.value)"></td></tr>`;
+    });
+    tb.innerHTML = html;
+    document.getElementById('poModalItemCount').innerHTML = `Aggregated Items: <strong>${groupKeys.length}</strong>`;
+    updatePOItemCount();
+}
+
+function toggleGroup(aggKey) {
+    if (ERP_STATE.selectedGroups.has(aggKey)) ERP_STATE.selectedGroups.delete(aggKey);
+    else ERP_STATE.selectedGroups.add(aggKey);
+    const cb = document.querySelector(`.group-checkbox[data-group="${aggKey}"]`);
+    if (cb) cb.checked = ERP_STATE.selectedGroups.has(aggKey);
+    updatePOItemCount();
+}
+
+function toggleAllItems() {
+    const checked = document.getElementById('selectAllItems').checked;
+    const groupKeys = Object.keys(ERP_STATE.groupMap);
+    groupKeys.forEach(key => { if (checked) ERP_STATE.selectedGroups.add(key); else ERP_STATE.selectedGroups.delete(key); });
+    document.querySelectorAll('.group-checkbox').forEach(cb => { cb.checked = checked; });
+    updatePOItemCount();
+}
+
+function updateGroupCGST(aggKey, value) {
+    const cgst = parseFloat(value) || 0;
+    if (ERP_STATE.groupMap[aggKey]) { ERP_STATE.groupMap[aggKey].cgst = cgst; const items = ERP_STATE.groupItemsMap[aggKey] || []; items.forEach(item => { item.cgst = cgst; }); }
+}
+
+function updateGroupIGST(aggKey, value) {
+    const igst = parseFloat(value) || 0;
+    if (ERP_STATE.groupMap[aggKey]) { ERP_STATE.groupMap[aggKey].igst = igst; const items = ERP_STATE.groupItemsMap[aggKey] || []; items.forEach(item => { item.igst = igst; }); }
+}
+
+function updatePOItemCount() {
+    const count = ERP_STATE.selectedGroups.size;
+    const selectedCountEl = document.getElementById('selectedCount');
+    if (selectedCountEl) selectedCountEl.textContent = count;
+    let totalQty = 0;
+    ERP_STATE.selectedGroups.forEach(aggKey => { if (ERP_STATE.groupMap[aggKey]) totalQty += ERP_STATE.groupMap[aggKey].totalBalance || 0; });
+    const poSummary = document.getElementById('poSummary');
+    if (poSummary) poSummary.textContent = `📋 ${count} groups · Total Qty: ${totalQty.toFixed(2)} units`;
+}
+
+function updatePOItems() { updatePOItemCount(); }
+
+function closeProcessPOModal() {
+    document.getElementById('processPOModal').classList.remove('active');
+    ERP_STATE.currentSupplierItems = [];
+    ERP_STATE.selectedGroups = new Set();
+    ERP_STATE.groupMap = {};
+    ERP_STATE.groupItemsMap = {};
+}
+
+async function generatePO() {
+    const supplier = document.getElementById('poModalSupplier').textContent.replace('Supplier: ', '').trim();
+    if (!supplier) { showToast('Please select a supplier', 'error'); return; }
+    const supplierAlias = document.getElementById('supplierAlias').value.trim() || supplier;
+    const selectedItemsList = [];
+    ERP_STATE.selectedGroups.forEach(aggKey => {
+        const items = ERP_STATE.groupItemsMap[aggKey] || [];
+        items.forEach(item => { selectedItemsList.push({ ...item, orderedQty: item.balanceToOrder || item.requiredQty || 0 }); });
+    });
+    if (selectedItemsList.length === 0) { showToast('Please select at least one group', 'error'); return; }
+    const excess = parseFloat(document.getElementById('poExcess').value) || 0;
+    const allowExtra = document.getElementById('allowExtra').checked;
+    const cgstOverride = {};
+    const igstOverride = {};
+    selectedItemsList.forEach(item => {
+        if (item.requirementKey) {
+            const groupKey = `${item.itemName}|${item.garmentSize || 'ALL'}|${item.color || ''}|${item.itemSize || ''}`;
+            cgstOverride[item.requirementKey] = ERP_STATE.groupMap[groupKey]?.cgst || item.cgst || 0;
+            igstOverride[item.requirementKey] = ERP_STATE.groupMap[groupKey]?.igst || item.igst || 0;
+        }
+    });
+    const poData = { supplier, supplier_alias: supplierAlias, selected_items: selectedItemsList, excess_percentage: excess, cgst_override: cgstOverride, igst_override: igstOverride, allow_extra: allowExtra };
+    showToast(`Generating PO...`, 'info');
+    const btn = document.getElementById('generatePOBtn');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    try {
+        const r = await API.generatePO(poData);
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-pdf"></i> Generate PO';
+        if (r.success) { showToast(`PO generated with ${r.itemCount} items`, 'success'); openPOPreview(r.poHTML, r.poToken); closeProcessPOModal(); refreshRMOrders(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        btn.disabled = false; btn.innerHTML = '<i class="fas fa-file-pdf"></i> Generate PO';
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+function openPOPreview(html, poToken) {
+    ERP_STATE.currentPOToken = poToken;
+    document.getElementById('poPreviewToken').textContent = poToken;
+    document.getElementById('poPreviewFrame').srcdoc = html;
+    document.getElementById('poPreviewModal').classList.add('active');
+}
+
+function closePOPreview() {
+    document.getElementById('poPreviewModal').classList.remove('active');
+    document.getElementById('poPreviewFrame').srcdoc = '';
+    ERP_STATE.currentPOToken = null;
+}
+
+async function savePOAction() {
+    if (!ERP_STATE.currentPOToken) { showToast('No PO to save', 'error'); return; }
+    showToast('Saving PO...', 'info');
+    try {
+        const r = await API.savePO(ERP_STATE.currentPOToken);
+        if (r.success) { showToast('PO saved!', 'success'); closePOPreview(); refreshRMOrders(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function processPOFromPreview() {
+    if (!ERP_STATE.currentPOToken) { showToast('No PO to process', 'error'); return; }
+    if (!confirm('Process this PO?')) return;
+    showToast('Processing PO...', 'info');
+    try {
+        const r = await API.processPO(ERP_STATE.currentPOToken);
+        if (r.success) { showToast('PO processed! Moved to GRN.', 'success'); closePOPreview(); refreshRMOrders(); refreshGRNOrders(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// GRN
+// ==============================================================
+async function refreshGRNOrders() {
+    showToast('Loading GRN orders...', 'info');
+    try {
+        const orders = await API.getGRNOrders();
+        ERP_STATE.grnData = orders || [];
+        renderGRNOrders(ERP_STATE.grnData);
+        showToast(ERP_STATE.grnData && ERP_STATE.grnData.length ? 'GRN orders loaded' : 'No GRN orders found', ERP_STATE.grnData && ERP_STATE.grnData.length ? 'success' : 'info');
+    } catch (e) {
+        showToast('Error loading GRN orders: ' + e.message, 'error');
+    }
+}
+
+function renderGRNOrders(orders) {
+    const container = document.getElementById('grnBody');
+    if (!orders || orders.length === 0) { container.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px;">No GRN orders found.</div>'; return; }
+    let html = '';
+    orders.forEach(order => {
+        const statusBadge = order.status === 'PARTIAL' ? 'partial' : (order.status === 'COMPLETED' ? 'success' : 'warning');
+        const statusText = order.status || 'PROCESSED';
+        const itemCount = order.items ? order.items.length : 0;
+        const fgKeys = order.fgKeys ? order.fgKeys.join(', ') : 'N/A';
+        html += `<div class="po-card"><div class="po-card-header"><span class="po-card-title">PO: ${order.poToken || '—'}</span><div style="display:flex;gap:4px;flex-wrap:wrap;"><span class="badge-status info">Items: ${itemCount}</span><span class="badge-status ${statusBadge}">${statusText}</span></div></div><div class="po-card-meta">Supplier: ${order.supplierAlias || order.supplier || ''} | FG Keys: ${fgKeys}</div><div style="margin-top:6px;"><button class="btn btn-success btn-sm" onclick="openGRNModal('${order.poToken}')"><i class="fas fa-clipboard-check"></i> Receive</button></div></div>`;
+    });
+    container.innerHTML = html;
+}
+
+function openGRNModal(poToken) {
+    const order = ERP_STATE.grnData.find(o => o.poToken === poToken);
+    if (!order) { showToast('Order not found', 'error'); return; }
+    ERP_STATE.currentGRNData = order;
+    document.getElementById('grnPOToken').textContent = poToken;
+    document.getElementById('grnSupplier').innerHTML = `Supplier: <strong>${order.supplierAlias || order.supplier || ''}</strong>`;
+    document.getElementById('grnInvoiceNo').value = '';
+    renderGRNUnpacked(order);
+    document.getElementById('grnModal').classList.add('active');
+}
+
+function renderGRNUnpacked(order) {
+    const container = document.getElementById('grnFGGroupContainer');
+    if (!order.groupedByFG || order.groupedByFG.length === 0) {
+        container.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px;">No FG groups found</div>';
+        return;
+    }
+    let html = '';
+    order.groupedByFG.forEach(fgGroup => {
+        const fgKey = fgGroup.fgKey || 'Unknown FG';
+        html += `<div class="grn-fg-group"><div class="fg-label">FG Key: <span class="fg-key-display">${fgKey}</span></div>
+            <table style="width:100%;margin-top:4px;font-size:9px;"><thead><tr>
+                <th>Item No</th><th>Item Name</th><th>Size</th><th>Item Size</th><th>Ordered</th><th>Received</th><th>Balance</th><th>Rate</th><th>HSN</th><th style="min-width:60px;">Received Qty</th>
+            </tr></thead><tbody>`;
+        fgGroup.items.forEach((item, idx) => {
+            const balance = item.balanceToReceive || 0;
+            const isComplete = item.isComplete || false;
+            const balanceClass = isComplete ? 'balance-complete' : 'balance-to-receive';
+            const balanceText = isComplete ? '✅ Complete' : balance.toFixed(2);
+            html += `<tr data-po-token="${item.poToken || order.poToken}" data-fg-key="${fgKey}" data-item-no="${item.itemNo || ''}" data-garment-size="${item.garmentSize || 'ALL'}">
+                <td>${item.itemNo || '—'}</td>
+                <td>${item.itemName || '—'}</td>
+                <td>${item.garmentSize || 'ALL'}</td>
+                <td>${item.itemSize || ''}</td>
+                <td>${(item.orderedQty || 0).toFixed(2)}</td>
+                <td>${(item.receivedQty || 0).toFixed(2)}</td>
+                <td class="${balanceClass}">${balanceText}</td>
+                <td><input type="number" class="grn-rate" value="${item.rate || 0}" step="0.01" style="width:50px;" class="grn-item-input"></td>
+                <td><input type="text" class="grn-hsn" value="${item.hsn || ''}" style="width:50px;" class="grn-item-input"></td>
+                <td><input type="number" class="grn-qty" value="${balance > 0 ? balance.toFixed(2) : '0'}" step="0.01" style="width:60px;" class="grn-item-input" ${isComplete ? 'disabled' : ''}></td>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    });
+    container.innerHTML = html;
+    updateGRNSummary();
+}
+
+function updateGRNSummary() {
+    const qtyInputs = document.querySelectorAll('.grn-qty');
+    let totalQty = 0;
+    qtyInputs.forEach(input => { const val = parseFloat(input.value) || 0; totalQty += val; });
+    const summary = document.getElementById('grnSummary');
+    if (summary) summary.textContent = `📦 Total Receiving: ${totalQty.toFixed(2)} units`;
+}
+
+function closeGRNModal() { document.getElementById('grnModal').classList.remove('active'); ERP_STATE.currentGRNData = null; }
+
+async function cancelGRNFromModal() {
+    const poToken = document.getElementById('grnPOToken').textContent;
+    const invoiceNo = document.getElementById('grnInvoiceNo').value.trim();
+    if (!poToken) { showToast('No PO token found', 'error'); return; }
+    if (!confirm(`⚠️ Are you sure you want to cancel GRN for PO: ${poToken}${invoiceNo ? ' Invoice: ' + invoiceNo : ''}?`)) return;
+    showToast('Cancelling GRN...', 'info');
+    try {
+        const r = await API.cancelGRN(poToken, invoiceNo);
+        if (r.success) { showToast(r.message, 'success'); closeGRNModal(); refreshGRNOrders(); refreshRMOrders(); refreshIssueRMOrders(); } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function saveGRN() {
+    const poToken = document.getElementById('grnPOToken').textContent;
+    const invoiceNo = document.getElementById('grnInvoiceNo').value.trim();
+    const rows = document.querySelectorAll('#grnFGGroupContainer tr[data-po-token]');
+    const items = [];
+    let hasError = false;
+
+    rows.forEach(row => {
+        const qtyInput = row.querySelector('.grn-qty');
+        const rateInput = row.querySelector('.grn-rate');
+        const hsnInput = row.querySelector('.grn-hsn');
+        const qty = parseFloat(qtyInput?.value) || 0;
+        const rate = parseFloat(rateInput?.value) || 0;
+
+        if (qty < 0) { showToast('Received quantity cannot be negative', 'error'); hasError = true; return; }
+        if (qty === 0) return;
+
+        const poToken = row.dataset.poToken || '';
+        const fgKey = row.dataset.fgKey || '';
+        const itemNo = row.dataset.itemNo || '';
+        const garmentSize = row.dataset.garmentSize || 'ALL';
+        const itemName = row.querySelector('td:nth-child(2)')?.textContent || '';
+        const itemSize = row.querySelector('td:nth-child(4)')?.textContent || '';
+        const color = row.querySelector('td:nth-child(3)')?.textContent || '';
+        const orderedQty = parseFloat(row.querySelector('td:nth-child(5)')?.textContent) || 0;
+
+        items.push({
+            po_token: poToken,
+            fg_key: fgKey,
+            item_no: itemNo,
+            garment_size: garmentSize,
+            item_name: itemName,
+            item_size: itemSize,
+            color: color,
+            ordered_qty: orderedQty,
+            received_qty: qty,
+            rate: rate,
+            hsn: hsnInput?.value || '',
+            uom: 'PCS',
+            cgst: 0,
+            igst: 0,
+            requirement_key: ''
+        });
+    });
+
+    if (hasError) return;
+    if (items.length === 0) { showToast('No items to receive', 'error'); return; }
+
+    const grnData = { po_token: poToken, invoice_no: invoiceNo, items };
+    showToast('Saving GRN...', 'info');
+    try {
+        const r = await API.saveGRN(grnData);
+        if (r.success) { showToast(r.message, 'success'); closeGRNModal(); refreshGRNOrders(); refreshRMOrders(); refreshIssueRMOrders(); if (r.hasShortfall) { showToast(`⚠️ Shortfall detected: ${r.shortfallCount} items`, 'warning'); } } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+async function refreshShortfalls() {
+    showToast('Loading shortfalls...', 'info');
+    try {
+        const data = await API.getPendingShortfalls();
+        ERP_STATE.shortfallData = data || [];
+        renderShortfalls(ERP_STATE.shortfallData);
+        document.getElementById('shortfallModal').classList.add('active');
+        showToast(ERP_STATE.shortfallData && ERP_STATE.shortfallData.length ? 'Shortfalls loaded' : 'No shortfalls found', ERP_STATE.shortfallData && ERP_STATE.shortfallData.length ? 'success' : 'info');
+    } catch (e) {
+        showToast('Error loading shortfalls: ' + e.message, 'error');
+    }
+}
+
+function renderShortfalls(shortfalls) {
+    const container = document.getElementById('shortfallContainer');
+    if (!shortfalls || shortfalls.length === 0) { container.innerHTML = '<div class="text-muted" style="text-align:center;padding:20px;">No pending shortfalls found.</div>'; return; }
+    let html = '';
+    shortfalls.forEach(shortfall => {
+        html += `<div class="shortfall-item">
+            <div class="flex-between"><div><strong>FG: ${shortfall.fgKey || '—'}</strong> <span class="text-muted">| Item: ${shortfall.itemName || '—'}</span></div><span class="shortfall-qty">Shortfall: ${(shortfall.shortfall || 0).toFixed(2)}</span></div>
+            <div style="font-size:10px;color:#856404;margin-top:2px;">Size: ${shortfall.garmentSize || 'ALL'} | Required: ${(shortfall.orderedQty || 0).toFixed(2)} | Received: ${(shortfall.receivedQty || 0).toFixed(2)}</div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function closeShortfallModal() { document.getElementById('shortfallModal').classList.remove('active'); }
+
+// ==============================================================
+// ISSUE RM
+// ==============================================================
+async function refreshIssueRMOrders() {
+    showToast('Loading pending issues...', 'info');
+    try {
+        const orders = await API.getIssueRMOrders();
+        ERP_STATE.issueRMData = orders || [];
+        renderIssueRMOrders(ERP_STATE.issueRMData);
+        showToast(ERP_STATE.issueRMData && ERP_STATE.issueRMData.length ? 'Pending issues loaded' : 'No pending issues', ERP_STATE.issueRMData && ERP_STATE.issueRMData.length ? 'success' : 'info');
+    } catch (e) {
+        showToast('Error loading issues: ' + e.message, 'error');
+    }
+}
+
+function renderIssueRMOrders(orders) {
+    const tb = document.getElementById('issueRMOrderBody');
+    if (!orders || orders.length === 0) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#62748e;padding:16px;">No pending issues</td></tr>'; return; }
+    let html = '';
+    orders.forEach(o => {
+        const status = o.isComplete ? '✅ Complete' : (o.isPartial ? '⚠️ Partial' : '⏳ Pending');
+        const statusBadge = o.isComplete ? 'success' : (o.isPartial ? 'partial' : 'pending-issue');
+        const available = o.availableToIssue || 0;
+        html += `<tr><td><strong>${o.fgKey || '—'}</strong></td><td>${(o.totalRequired || 0).toFixed(2)}</td><td>${(o.totalGRN || 0).toFixed(2)}</td><td>${(o.totalIssued || 0).toFixed(2)}</td>
+            <td>${(available).toFixed(2)}</td><td><span class="badge-status ${statusBadge}">${status}</span></td>
+            <td><button class="btn btn-success btn-sm" onclick="openIssueRMModal('${o.fgKey}')" ${available <= 0 ? 'disabled' : ''}><i class="fas fa-arrow-right-from-bracket"></i> Issue</button>
+            <button class="btn btn-danger btn-sm" onclick="cancelStageAction('${o.fgKey}','ISSUE_RM')"><i class="fas fa-undo"></i> Cancel</button></td></tr>`;
+    });
+    tb.innerHTML = html;
+}
+
+async function openIssueRMModal(fgKey) {
+    document.getElementById('issueModalFGKey').innerHTML = `FG Key: <strong>${fgKey}</strong>`;
+    document.getElementById('issueModalStatus').innerHTML = `Status: <strong>Loading...</strong>`;
+    document.getElementById('issueSummary').textContent = 'Loading requirements...';
+    try {
+        const items = await API.getIssuableItems(fgKey);
+        renderIssueRMItems(items, fgKey);
+        const totalAvailable = items.reduce((sum, i) => sum + i.availableToIssue, 0);
+        document.getElementById('issueSummary').textContent = `📋 ${items.length} items · Available: ${totalAvailable.toFixed(2)} units`;
+        document.getElementById('issueModalStatus').innerHTML = `Status: <strong>${totalAvailable > 0 ? 'Ready' : 'Complete'}</strong>`;
+        document.getElementById('issueRMModal').classList.add('active');
+    } catch (e) {
+        showToast('Error loading items: ' + e.message, 'error');
+    }
+}
+
+function renderIssueRMItems(items, fgKey) {
+    const tb = document.getElementById('issueRMItemsBody');
+    if (!items || items.length === 0) { tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#62748e;">No items</td></tr>'; return; }
+    let html = '';
+    items.forEach((item, idx) => {
+        const available = item.availableToIssue || 0;
+        const maxIssuable = item.maxIssuable || item.requiredQty * 1.05;
+        const defaultQty = Math.min(available, maxIssuable);
+        html += `<tr data-requirement-key="${item.requirementKey || ''}">
+            <td>${item.itemName || '—'}</td>
+            <td>${item.garmentSize || 'ALL'}</td>
+            <td>${item.itemSize || ''}</td>
+            <td>${(item.requiredQty || 0).toFixed(2)}</td>
+            <td>${(item.grnQty || 0).toFixed(2)}</td>
+            <td>${(item.issuedQty || 0).toFixed(2)}</td>
+            <td><span class="${available > maxIssuable ? 'issue-buffer-warning' : 'issue-buffer-ok'}">${(available).toFixed(2)}</span></td>
+            <td><input type="number" class="issue-qty" data-idx="${idx}" value="${Math.min(defaultQty, maxIssuable).toFixed(2)}" step="0.01" style="width:70px;" onchange="validateIssueQty(${idx}, this.value)"></td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+}
+
+function validateIssueQty(idx, value) {
+    const row = document.querySelector(`#issueRMItemsBody tr:nth-child(${idx + 1})`);
+    if (!row) return;
+    const availableCell = row.querySelector('td:nth-child(7)');
+    const available = parseFloat(availableCell?.textContent || 0);
+    const qty = parseFloat(value) || 0;
+    if (qty > available) { showToast(`❌ Issuance exceeds available limit. Available: ${available.toFixed(2)}`, 'error'); row.querySelector('.issue-qty').value = available.toFixed(2); }
+}
+
+function closeIssueRMModal() { document.getElementById('issueRMModal').classList.remove('active'); }
+
+async function saveIssueRM() {
+    const fgKey = document.getElementById('issueModalFGKey').textContent.replace('FG Key: ', '').trim();
+    const rows = document.querySelectorAll('#issueRMItemsBody tr');
+    const items = [];
+    let hasError = false;
+    rows.forEach((row, idx) => {
+        const qtyInput = row.querySelector('.issue-qty');
+        const qty = parseFloat(qtyInput?.value) || 0;
+        if (qty < 0) { showToast(`Row ${idx + 1}: Quantity cannot be negative`, 'error'); hasError = true; return; }
+        if (qty === 0) return;
+
+        const availableCell = row.querySelector('td:nth-child(7)');
+        const available = parseFloat(availableCell?.textContent || 0);
+        if (qty > available) { showToast(`❌ Row ${idx + 1}: Issuance exceeds available limit. Available: ${available.toFixed(2)}`, 'error'); hasError = true; return; }
+        const garmentSize = row.querySelector('td:nth-child(2)')?.textContent || 'ALL';
+        const itemSize = row.querySelector('td:nth-child(3)')?.textContent || '';
+        const requirementKey = row.dataset.requirementKey || '';
+        const itemName = row.querySelector('td:nth-child(1)')?.textContent || '';
+        const requiredQty = parseFloat(row.querySelector('td:nth-child(4)')?.textContent) || 0;
+
+        items.push({
+            item_no: '',
+            item_name: itemName,
+            garment_size: garmentSize,
+            item_size: itemSize,
+            color: '',
+            required_qty: requiredQty,
+            issuing_qty: qty,
+            uom: 'PCS',
+            requirement_key: requirementKey
+        });
+    });
+    if (hasError) return;
+    if (items.length === 0) { showToast('Please issue at least one item', 'error'); return; }
+    const issueData = { fg_key: fgKey, items };
+    showToast(`Issuing items...`, 'info');
+    try {
+        const r = await API.saveIssueRM(issueData);
+        if (r.success) { showToast(r.message, 'success'); closeIssueRMModal(); refreshIssueRMOrders(); if (r.allComplete) { showToast('🎉 All requirements fulfilled! Order closed.', 'success'); } } else showToast('Error: ' + r.message, 'error');
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// REPORTS
+// ==============================================================
+let reportDataCache = {};
+
+async function loadReports() {
+    showToast('Loading reports...', 'info');
+    const reportTypes = ['BUYER_ORDER_STATUS', 'RM_STOCK', 'RM_ORDERED'];
+    let loaded = 0;
+
+    try {
+        const filters = await API.getReportFilters();
+        ERP_STATE.reportFilters = filters;
+        const supplierSelects = ['filter-stock-supplier', 'filter-ordered-supplier'];
+        supplierSelects.forEach(id => {
+            const sel = document.getElementById(id);
+            if (sel) {
+                const current = sel.value;
+                sel.innerHTML = '<option value="ALL">All Suppliers</option>';
+                if (filters.suppliers) {
+                    filters.suppliers.forEach(s => sel.innerHTML += `<option value="${s}">${s}</option>`);
+                }
+                if (current) sel.value = current;
+            }
+        });
+    } catch (e) {
+        showToast('Error loading filters: ' + e.message, 'error');
+    }
+
+    reportTypes.forEach(async (type) => {
+        const filters = getReportFiltersForType(type);
+        try {
+            const data = await API.getReportData(type, filters);
+            reportDataCache[type] = data || [];
+            renderReport(type, data);
+            loaded++;
+            if (loaded === reportTypes.length) { showToast('Reports loaded', 'success'); }
+        } catch (e) {
+            showToast(`Error loading ${type}: ${e.message}`, 'error');
+            loaded++;
+        }
+    });
+}
+
+function getReportFiltersForType(type) {
+    const filters = {};
+    switch (type) {
+        case 'BUYER_ORDER_STATUS':
+            filters.status = document.getElementById('filter-buyer-status')?.value || 'ALL';
+            filters.dateFrom = document.getElementById('filter-buyer-from')?.value || '';
+            filters.dateTo = document.getElementById('filter-buyer-to')?.value || '';
+            break;
+        case 'RM_STOCK':
+            filters.supplier = document.getElementById('filter-stock-supplier')?.value || 'ALL';
+            filters.fgKey = document.getElementById('filter-stock-search')?.value || '';
+            filters.status = document.getElementById('filter-stock-status')?.value || 'ALL';
+            break;
+        case 'RM_ORDERED':
+            filters.supplier = document.getElementById('filter-ordered-supplier')?.value || 'ALL';
+            filters.status = document.getElementById('filter-ordered-status')?.value || 'ALL';
+            filters.dateFrom = document.getElementById('filter-ordered-from')?.value || '';
+            filters.dateTo = document.getElementById('filter-ordered-to')?.value || '';
+            break;
+    }
+    return filters;
+}
+
+function switchReportTab(tabName) {
+    document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.report-tab[data-report="${tabName}"]`)?.classList.add('active');
+    document.querySelectorAll('.report-container').forEach(c => c.classList.remove('active'));
+    document.getElementById(`report-${tabName}`)?.classList.add('active');
+    const typeMap = { buyer_status: 'BUYER_ORDER_STATUS', rm_stock: 'RM_STOCK', rm_ordered: 'RM_ORDERED' };
+    const data = reportDataCache[typeMap[tabName]];
+    if (data && data.length > 0) { renderReport(typeMap[tabName], data); } else { filterReport(tabName); }
+}
+
+async function filterReport(tabName) {
+    const typeMap = { buyer_status: 'BUYER_ORDER_STATUS', rm_stock: 'RM_STOCK', rm_ordered: 'RM_ORDERED' };
+    const type = typeMap[tabName];
+    const filters = getReportFiltersForType(type);
+    showToast('Filtering...', 'info');
+    try {
+        const data = await API.getReportData(type, filters);
+        reportDataCache[type] = data || [];
+        renderReport(type, data);
+        showToast(`Filtered: ${data.length} records`, 'success');
+    } catch (e) {
+        showToast('Error filtering: ' + e.message, 'error');
+    }
+}
+
+function renderReport(type, data) {
+    const idMap = {
+        'BUYER_ORDER_STATUS': 'report-buyer_status-body',
+        'RM_STOCK': 'report-rm_stock-body',
+        'RM_ORDERED': 'report-rm_ordered-body'
+    };
+    const tbody = document.getElementById(idMap[type]);
+    if (!tbody) return;
+    if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#62748e;padding:16px;">No data found</td></tr>'; return; }
+    let html = '';
+    const searchVal = getSearchValueForType(type);
+
+    data.forEach(row => {
+        if (searchVal) {
+            const rowStr = JSON.stringify(row).toLowerCase();
+            if (!rowStr.includes(searchVal.toLowerCase())) return;
+        }
+        switch (type) {
+            case 'BUYER_ORDER_STATUS':
+                const statusClass = row.isComplete ? 'closed' : (row.currentStatus || '').toLowerCase();
+                html += `<tr><td><strong>${row.fgKey || '—'}</strong></td>
+                    <td>${row.buyerOrderNo || 'N/A'}</td>
+                    <td>${row.buyerName || 'N/A'}</td>
+                    <td>${row.orderDate ? new Date(row.orderDate).toLocaleDateString('en-IN') : '—'}</td>
+                    <td><span class="status-badge ${statusClass}">${row.currentStatus || 'UNKNOWN'}</span></td>
+                    <td>${row.bomTime ? new Date(row.bomTime).toLocaleString('en-IN') : '—'}</td>
+                    <td>${row.rmOrderTime ? new Date(row.rmOrderTime).toLocaleString('en-IN') : '—'}</td>
+                    <td>${row.grnTime ? new Date(row.grnTime).toLocaleString('en-IN') : '—'}</td>
+                    <td>${row.issueTime ? new Date(row.issueTime).toLocaleString('en-IN') : '—'}</td></tr>`;
+                break;
+            case 'RM_STOCK':
+                const stockStatus = row.stock > 0 ? (row.stock < 10 ? 'warning' : 'success') : 'danger';
+                html += `<tr><td><strong>${row.fgKey || '—'}</strong></td>
+                    <td>${row.itemName || '—'}</td>
+                    <td>${row.garmentSize || '—'}</td>
+                    <td>${row.color || '—'}</td>
+                    <td>${row.supplier || '—'}</td>
+                    <td>₹${(row.rate || 0).toFixed(2)}</td>
+                    <td>${(row.grnReceived || 0).toFixed(2)}</td>
+                    <td>${(row.issued || 0).toFixed(2)}</td>
+                    <td><span class="text-${stockStatus}">${(row.stock || 0).toFixed(2)}</span></td>
+                    <td>${(row.required || 0).toFixed(2)}</td></tr>`;
+                break;
+            case 'RM_ORDERED':
+                const poStatus = row.status || 'DRAFT';
+                const poStatusClass = poStatus.toLowerCase();
+                html += `<tr><td><strong>${row.poToken || '—'}</strong></td>
+                    <td>${row.supplier || '—'}</td>
+                    <td>${row.orderDate ? new Date(row.orderDate).toLocaleDateString('en-IN') : '—'}</td>
+                    <td>${row.fgKeys ? row.fgKeys.join(', ') : 'N/A'}</td>
+                    <td>${(row.totalQty || 0).toFixed(2)}</td>
+                    <td>₹${(row.totalAmount || 0).toFixed(2)}</td>
+                    <td><span class="status-badge ${poStatusClass}">${poStatus}</span></td></tr>`;
+                break;
+        }
+    });
+    tbody.innerHTML = html || '<tr><td colspan="10" style="text-align:center;color:#62748e;padding:16px;">No matching records</td></tr>';
+}
+
+function getSearchValueForType(type) {
+    const idMap = {
+        'BUYER_ORDER_STATUS': 'filter-buyer-search',
+        'RM_STOCK': 'filter-stock-search',
+        'RM_ORDERED': 'filter-ordered-search'
+    };
+    const el = document.getElementById(idMap[type]);
+    return el ? el.value : '';
+}
+
+function exportReportCSV(tabName) {
+    const typeMap = { buyer_status: 'BUYER_ORDER_STATUS', rm_stock: 'RM_STOCK', rm_ordered: 'RM_ORDERED' };
+    const type = typeMap[tabName];
+    const data = reportDataCache[type] || [];
+    if (data.length === 0) { showToast('No data to export', 'error'); return; }
+    const headers = Object.keys(data[0]);
+    let csv = headers.join(',') + '\n';
+    data.forEach(row => {
+        const values = headers.map(h => {
+            let val = row[h];
+            if (typeof val === 'string' && val.includes(',')) val = `"${val}"`;
+            if (val instanceof Date) val = val.toISOString();
+            if (val === null || val === undefined) val = '';
+            return val;
+        });
+        csv += values.join(',') + '\n';
+    });
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('CSV exported', 'success');
+}
+
+function printReport(tabName) {
+    const content = document.getElementById(`report-${tabName}-table`);
+    if (!content) return;
+    const printWindow = window.open('', '_blank');
+    const html = `<html><head><title>Sneha ERP - ${tabName}</title>
+        <style>body { font-family: Arial, sans-serif; padding: 20px; } table { width: 100%; border-collapse: collapse; } th { background: #f0f4fe; padding: 8px; text-align: left; } td { padding: 6px 8px; border-bottom: 1px solid #ddd; } .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 10px; } .status-badge.completed { background: #d4edda; } .status-badge.partial { background: #fff3cd; } .status-badge.draft { background: #cce5ff; } .status-badge.closed { background: #d1ecf1; } .text-success { color: #34a853; } .text-danger { color: #ea4335; } .text-warning { color: #fbbc04; }</style></head><body>
+        <h2>Sneha Creations ERP - ${tabName}</h2>
+        <p>Generated: ${new Date().toLocaleString()}</p>
+        ${content.innerHTML}</body></html>`;
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.onload = function () { printWindow.print(); };
+}
+
+// ==============================================================
+// DEBUG
+// ==============================================================
+async function debugFGStatus() {
+    let fgKey = null;
+    const bomRow = document.querySelector('#bomOrderBody tr:first-child');
+    if (bomRow) { fgKey = bomRow.querySelector('td:first-child')?.textContent?.trim(); }
+    if (!fgKey) { const issueRow = document.querySelector('#issueRMOrderBody tr:first-child'); if (issueRow) { fgKey = issueRow.querySelector('td:first-child')?.textContent?.trim(); } }
+    if (!fgKey) { showToast('No FG Key found. Load orders first.', 'error'); return; }
+    showToast('Checking status for: ' + fgKey, 'info');
+    try {
+        const result = await API.debugFGStatus(fgKey);
+        let msg = '═══════════════════════════════════════\n     FG STATUS REPORT\n═══════════════════════════════════════\n';
+        msg += 'FG Key: ' + result.fgKey + '\nCurrent Position: ' + result.currentPosition + '\nTotal Entries: ' + result.totalEntries + '\n───────────────────────────────────────\n';
+        if (result.allStatuses) { for (const [module, status] of Object.entries(result.allStatuses)) { msg += module + ': ' + status + '\n'; } }
+        msg += '───────────────────────────────────────\n';
+        if (result.entries && result.entries.length > 0) {
+            msg += 'Recent Entries:\n';
+            const recent = result.entries.slice(-5);
+            for (const entry of recent) { msg += `  ${entry.activity}: ${entry.status} ${entry.size ? '| Size: ' + entry.size : ''} ${entry.qty ? '| Qty: ' + entry.qty : ''}\n`; }
+        }
+        msg += '═══════════════════════════════════════';
+        alert(msg);
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// KEYBOARD SHORTCUTS
+// ==============================================================
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeBuyerModal();
+        closeBOMModal();
+        closeRMSupplierModal();
+        closeProcessPOModal();
+        closePOPreview();
+        closeGRNModal();
+        closeShortfallModal();
+        closeIssueRMModal();
+    }
+});
+
+// ==============================================================
+// INIT
+// ==============================================================
+
+// Cancel BUYER_ORDER
+async function cancelOrderAction() {
+    const fgOrderSerial = ERP_STATE.currentFGOrderSerial;
+    if (!fgOrderSerial) {
+        showToast('No order to cancel', 'error');
+        return;
+    }
+    if (!confirm(`⚠️ Are you sure you want to CANCEL the entire order: ${fgOrderSerial}?`)) return;
+    showToast('Cancelling order...', 'info');
+    try {
+        const r = await API.cancelOrder({ fgOrderSerial });
+        if (r.success) {
+            showToast(r.message, 'success');
+            document.getElementById('gridSection').style.display = 'none';
+            generateAutoSerial();
+            setDefaultDates();
+        } else {
+            showToast('Error: ' + r.message, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// Cancel RM ORDER
+async function cancelRMOrder() {
+    // Get the current RM order being processed
+    const supplier = document.getElementById('poModalSupplier').textContent.replace('Supplier: ', '').trim();
+    if (!supplier) {
+        showToast('No RM order to cancel', 'error');
+        return;
+    }
+    // Find the FG keys for this supplier
+    const supplierData = ERP_STATE.rmOrdersData.find(o => o.supplier === supplier);
+    if (!supplierData) {
+        showToast('Supplier not found', 'error');
+        return;
+    }
+    const fgKeys = supplierData.fgKeys || [];
+    if (fgKeys.length === 0) {
+        showToast('No FGs to cancel', 'error');
+        return;
+    }
+    if (!confirm(`⚠️ Are you sure you want to cancel RM ORDER for ${supplier}?`)) return;
+    showToast('Cancelling RM Order...', 'info');
+    try {
+        let allSuccess = true;
+        for (const fgKey of fgKeys) {
+            const r = await API.cancelStage({ fgKey, targetStage: 'RM_ORDER' });
+            if (!r.success) allSuccess = false;
+        }
+        if (allSuccess) {
+            showToast('RM Order cancelled successfully', 'success');
+            closeProcessPOModal();
+            refreshRMOrders();
+            refreshGRNOrders();
+        } else {
+            showToast('Some FGs could not be cancelled', 'warning');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// Cancel GRN ORDER
+async function cancelGRNOrder() {
+    const poToken = document.getElementById('grnPOToken').textContent;
+    if (!poToken) {
+        showToast('No GRN to cancel', 'error');
+        return;
+    }
+    if (!confirm(`⚠️ Are you sure you want to cancel GRN for PO: ${poToken}?`)) return;
+    showToast('Cancelling GRN...', 'info');
+    try {
+        const r = await API.cancelGRN(poToken, '');
+        if (r.success) {
+            showToast(r.message, 'success');
+            closeGRNModal();
+            refreshGRNOrders();
+            refreshRMOrders();
+            refreshIssueRMOrders();
+        } else {
+            showToast('Error: ' + r.message, 'error');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
