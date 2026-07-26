@@ -58,3 +58,6 @@ yarn-error.log*
 # Project specific
 project_dump.txt
 dump_project_v2.py
+*.json
+*.xlsx
+srms_export_*.xlsx
