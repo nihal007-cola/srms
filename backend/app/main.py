@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from .database import engine, Base
 from .routers import (
-    master_data, buyer_order, bom, rm_order, grn, issue_rm, reports, utils
+    master_data, buyer_order, bom, rm_order, grn, issue_rm, reports, utils, google_sheets
 )
 from . import auth
 from .config import settings
@@ -31,6 +31,7 @@ app.include_router(grn.router)
 app.include_router(issue_rm.router)
 app.include_router(reports.router)
 app.include_router(utils.router)
+app.include_router(google_sheets.router)
 
 FRONTEND_DIR = "/home/ubuntu/srms/frontend"
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
@@ -45,27 +46,17 @@ async def login():
 
 @app.get("/static/index.html")
 async def serve_index(request: Request):
-    # Get token from query parameter
     token = request.query_params.get("token")
-    
-    # If no token, check Authorization header
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.split(" ")[1]
-    
-    # If still no token, redirect to login
     if not token:
         return RedirectResponse(url="/login", status_code=302)
-    
-    # Verify the token
     try:
         jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-    except Exception as e:
-        print(f"Token validation error: {e}")
+    except:
         return RedirectResponse(url="/login", status_code=302)
-    
-    # Token is valid, serve the file
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 @app.get("/static/js/{filename}")
