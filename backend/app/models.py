@@ -78,3 +78,18 @@ class Settings(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     config_key = Column(String(100), unique=True, nullable=False)
     config_value = Column(Text, nullable=True)
+
+# User model for authentication
+class User(Base):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(255))
+    role = Column(String(50), default="viewer")
+    is_active = Column(Boolean, default=True)
+    reset_token = Column(String(255), nullable=True)
+    reset_token_expiry = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())

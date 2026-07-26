@@ -1,59 +1,35 @@
-// ==============================================================
-// AUTHENTICATION - FIXED
-// ==============================================================
-
-// 1. Extract token from URL (if present)
+// Extract token from URL and store in localStorage
 const urlParams = new URLSearchParams(window.location.search);
 const tokenFromUrl = urlParams.get("token");
 
-// 2. If token in URL, save it and remove from URL
-if (tokenFromUrl) {
-    localStorage.setItem('access_token', tokenFromUrl);
-    // Clean URL - remove token parameter
-    const newUrl = window.location.pathname + window.location.search.replace(/[?&]token=[^&]*/, '');
-    window.history.replaceState({}, document.title, newUrl);
-    console.log('✅ Token saved from URL');
-}
-
-// 3. Check authentication
+// ==============================================================
+// AUTHENTICATION CHECK
+// ==============================================================
+// Check if user is logged in
 const token = localStorage.getItem('access_token');
-
-// If no token, redirect to login
 if (!token) {
-    console.log('❌ No token found, redirecting to login');
     window.location.href = '/login';
-    throw new Error('Redirecting to login');
 }
 
-// 4. Verify token with server
-console.log('🔐 Verifying token...');
+// Verify token with server
 fetch('/api/auth/me', {
     headers: {
         'Authorization': 'Bearer ' + token
     }
 }).then(response => {
     if (!response.ok) {
-        console.error('❌ Token verification failed:', response.status);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        return Promise.reject('Token invalid');
-    }
-    console.log('✅ Token verified');
-    return response.json();
-}).catch(error => {
-    console.error('❌ Auth error:', error);
-    // Only redirect if not already on login page
-    if (!window.location.pathname.includes('/login')) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
         window.location.href = '/login';
     }
+}).catch(() => {
+    window.location.href = '/login';
 });
 
 // ==============================================================
 // API Client - FastAPI Backend
 // ==============================================================
+
 const API = {
     baseUrl: '',
 
@@ -63,7 +39,6 @@ const API = {
             method,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + localStorage.getItem('access_token')
             },
         };
         if (data) {
@@ -71,13 +46,6 @@ const API = {
         }
         try {
             const response = await fetch(url, options);
-            if (response.status === 401) {
-                // Token expired or invalid
-                localStorage.removeItem('access_token');
-                localStorage.removeItem('user');
-                window.location.href = '/login';
-                throw new Error('Session expired');
-            }
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`HTTP ${response.status}: ${errorText}`);
@@ -137,9 +105,8 @@ const API = {
 };
 
 // ==============================================================
-// REST OF THE APP FUNCTIONS
+// TOAST
 // ==============================================================
-
 function showToast(msg, type = '') {
     const t = document.getElementById('toast');
     t.textContent = msg;
@@ -148,12 +115,16 @@ function showToast(msg, type = '') {
     t._timeout = setTimeout(() => t.className = 'toast', 4000);
 }
 
+// ==============================================================
+// FILTER FUNCTION
+// ==============================================================
 function filterTable(searchInputId, containerId, rowSelector = 'tr') {
     const input = document.getElementById(searchInputId);
     if (!input) return;
     const filter = input.value.toLowerCase();
     const container = document.getElementById(containerId);
     if (!container) return;
+
     const rows = container.querySelectorAll(rowSelector);
     if (rows.length === 0 && container.children.length > 0) {
         const cards = container.querySelectorAll('.po-card');
@@ -163,12 +134,16 @@ function filterTable(searchInputId, containerId, rowSelector = 'tr') {
         });
         return;
     }
+
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
         row.style.display = text.includes(filter) ? '' : 'none';
     });
 }
 
+// ==============================================================
+// STATE
+// ==============================================================
 const ERP_STATE = {
     currentFGOrderSerial: null,
     gridData: [],
@@ -192,9 +167,28 @@ const ERP_STATE = {
 };
 
 // ==============================================================
-// BUYER ORDER FUNCTIONS
+// MODULE NAVIGATION
 // ==============================================================
+document.querySelectorAll('.module-card').forEach(card => {
+    card.addEventListener('click', function () {
+        const module = this.dataset.module;
+        document.querySelectorAll('.module-card').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+        document.querySelectorAll('.module-content').forEach(c => c.classList.remove('active'));
+        const el = document.getElementById(`module-${module}`);
+        if (el) el.classList.add('active');
+        if (module === 'BUYER_ORDER') { loadBuyers(); setDefaultDates(); generateAutoSerial(); document.getElementById('gridSection').style.display = 'none'; }
+        else if (module === 'BOM') refreshBOMOrders();
+        else if (module === 'RM_ORDER') refreshRMOrders();
+        else if (module === 'GRN') refreshGRNOrders();
+        else if (module === 'ISSUE_RM') refreshIssueRMOrders();
+        else if (module === 'REPORTS') loadReports();
+    });
+});
 
+// ==============================================================
+// BUYER ORDER
+// ==============================================================
 async function loadBuyers() {
     try {
         const buyers = await API.getBuyers();
@@ -222,7 +216,6 @@ async function loadBuyerDetails() {
 }
 
 function openBuyerModal() { document.getElementById('buyerModal').classList.add('active'); ['newBuyerName', 'newGstNo', 'newAddress', 'newContactPerson', 'newContactNo', 'newPaymentTerm'].forEach(id => document.getElementById(id).value = ''); }
-
 function closeBuyerModal() { document.getElementById('buyerModal').classList.remove('active'); }
 
 async function addNewBuyer() {
@@ -343,9 +336,8 @@ async function saveOrder() {
 }
 
 // ==============================================================
-// BOM FUNCTIONS
+// BOM
 // ==============================================================
-
 async function refreshBOMOrders() {
     showToast('Loading orders...', 'info');
     try {
@@ -537,7 +529,6 @@ async function saveBOM() {
 // ==============================================================
 // RM SUPPLIER MODAL
 // ==============================================================
-
 let rmSupplierCb = null;
 let storedBOMState = null;
 
@@ -571,9 +562,8 @@ async function addNewRMSupplier() {
 }
 
 // ==============================================================
-// RM ORDER FUNCTIONS
+// RM ORDER
 // ==============================================================
-
 async function refreshRMOrders() {
     showToast('Loading RM orders...', 'info');
     try {
@@ -786,9 +776,8 @@ async function processPOFromPreview() {
 }
 
 // ==============================================================
-// GRN FUNCTIONS
+// GRN
 // ==============================================================
-
 async function refreshGRNOrders() {
     showToast('Loading GRN orders...', 'info');
     try {
@@ -1008,9 +997,8 @@ function renderShortfalls(shortfalls) {
 function closeShortfallModal() { document.getElementById('shortfallModal').classList.remove('active'); }
 
 // ==============================================================
-// ISSUE RM FUNCTIONS
+// ISSUE RM
 // ==============================================================
-
 async function refreshIssueRMOrders() {
     showToast('Loading pending issues...', 'info');
     try {
@@ -1133,15 +1121,15 @@ async function saveIssueRM() {
 }
 
 // ==============================================================
-// REPORTS FUNCTIONS
+// REPORTS
 // ==============================================================
-
 let reportDataCache = {};
 
 async function loadReports() {
     showToast('Loading reports...', 'info');
     const reportTypes = ['BUYER_ORDER_STATUS', 'RM_STOCK', 'RM_ORDERED'];
     let loaded = 0;
+
     try {
         const filters = await API.getReportFilters();
         ERP_STATE.reportFilters = filters;
@@ -1160,6 +1148,7 @@ async function loadReports() {
     } catch (e) {
         showToast('Error loading filters: ' + e.message, 'error');
     }
+
     reportTypes.forEach(async (type) => {
         const filters = getReportFiltersForType(type);
         try {
@@ -1234,6 +1223,7 @@ function renderReport(type, data) {
     if (!data || data.length === 0) { tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#62748e;padding:16px;">No data found</td></tr>'; return; }
     let html = '';
     const searchVal = getSearchValueForType(type);
+
     data.forEach(row => {
         if (searchVal) {
             const rowStr = JSON.stringify(row).toLowerCase();
@@ -1333,9 +1323,8 @@ function printReport(tabName) {
 }
 
 // ==============================================================
-// DEBUG FUNCTIONS
+// DEBUG
 // ==============================================================
-
 async function debugFGStatus() {
     let fgKey = null;
     const bomRow = document.querySelector('#bomOrderBody tr:first-child');
@@ -1362,24 +1351,208 @@ async function debugFGStatus() {
 }
 
 // ==============================================================
-// NAVIGATION AND INIT
+// KEYBOARD SHORTCUTS
 // ==============================================================
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeBuyerModal();
+        closeBOMModal();
+        closeRMSupplierModal();
+        closeProcessPOModal();
+        closePOPreview();
+        closeGRNModal();
+        closeShortfallModal();
+        closeIssueRMModal();
+    }
+});
+document.querySelectorAll('.modal').forEach(m => { m.addEventListener('click', function (e) { if (e.target === this) this.classList.remove('active'); }); });
 
-document.addEventListener('DOMContentLoaded', function() {
+// ==============================================================
+// INIT
+// ==============================================================
+document.addEventListener('DOMContentLoaded', function () {
     loadBuyers();
     setDefaultDates();
     generateAutoSerial();
     console.log('✅ Sneha Creations ERP v1.0 - FastAPI + PostgreSQL');
 });
 
+// ==============================================================
+// TABLE FILTER FUNCTIONS
+// ==============================================================
+
+// BOM Table Filter
+function filterBOMTable() {
+    const rows = document.querySelectorAll('#bomOrderBody tr');
+    const filters = document.querySelectorAll('#module-BOM .filter-input');
+    
+    rows.forEach(row => {
+        let show = true;
+        filters.forEach(filter => {
+            const col = filter.dataset.col;
+            const val = filter.value.toLowerCase().trim();
+            if (!val) return;
+            
+            const cell = row.querySelector(`td:nth-child(${getColIndex(col)})`);
+            if (cell) {
+                const cellText = cell.textContent.toLowerCase().trim();
+                if (!cellText.includes(val)) show = false;
+            }
+        });
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// RM Order Table Filter
+function filterRMOrderTable() {
+    const rows = document.querySelectorAll('#rmOrderBody tr');
+    const filters = document.querySelectorAll('#module-RM_ORDER .filter-input');
+    
+    rows.forEach(row => {
+        let show = true;
+        filters.forEach(filter => {
+            const col = filter.dataset.col;
+            const val = filter.value.toLowerCase().trim();
+            if (!val) return;
+            
+            const cell = row.querySelector(`td:nth-child(${getColIndex(col)})`);
+            if (cell) {
+                const cellText = cell.textContent.toLowerCase().trim();
+                if (!cellText.includes(val)) show = false;
+            }
+        });
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// GRN Table Filter
+function filterGRNTable() {
+    const rows = document.querySelectorAll('#grnBody tr');
+    const filters = document.querySelectorAll('#module-GRN .filter-input');
+    
+    rows.forEach(row => {
+        let show = true;
+        filters.forEach(filter => {
+            const col = filter.dataset.col;
+            const val = filter.value.toLowerCase().trim();
+            if (!val) return;
+            
+            const cell = row.querySelector(`td:nth-child(${getColIndex(col)})`);
+            if (cell) {
+                const cellText = cell.textContent.toLowerCase().trim();
+                if (!cellText.includes(val)) show = false;
+            }
+        });
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Issue RM Table Filter
+function filterIssueRMTable() {
+    const rows = document.querySelectorAll('#issueRMOrderBody tr');
+    const filters = document.querySelectorAll('#module-ISSUE_RM .filter-input');
+    
+    rows.forEach(row => {
+        let show = true;
+        filters.forEach(filter => {
+            const col = filter.dataset.col;
+            const val = filter.value.toLowerCase().trim();
+            if (!val) return;
+            
+            const cell = row.querySelector(`td:nth-child(${getColIndex(col)})`);
+            if (cell) {
+                const cellText = cell.textContent.toLowerCase().trim();
+                if (!cellText.includes(val)) show = false;
+            }
+        });
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+// Helper to get column index based on data-col
+function getColIndex(col) {
+    const map = {
+        'fgKey': 1,
+        'buyerOrderNo': 2,
+        'orderDate': 3,
+        'supplier': 1,
+        'fgKeys': 2,
+        'totalQuantity': 3,
+        'poToken': 2,
+        'items': 5,
+        'orderedQty': 6,
+        'receivedQty': 7,
+        'balanceQty': 8,
+        'status': 9,
+        'totalRequired': 2,
+        'totalGRN': 3,
+        'totalIssued': 4,
+        'availableToIssue': 5
+    };
+    return map[col] || 1;
+}
+
+// Cancel RM Order (double confirmation)
+async function cancelRMOrderAction() {
+    const supplier = document.getElementById('poModalSupplier')?.textContent?.replace('Supplier: ', '').trim();
+    if (!supplier) {
+        showToast('No RM order to cancel', 'error');
+        return;
+    }
+    
+    if (!confirm(`⚠️ Are you sure you want to CANCEL RM ORDER for ${supplier}?`)) return;
+    if (!confirm(`⚠️ FINAL CONFIRMATION: Cancel RM ORDER for ${supplier}? This cannot be undone!`)) return;
+    
+    showToast('Cancelling RM Order...', 'info');
+    try {
+        const supplierData = ERP_STATE.rmOrdersData.find(o => o.supplier === supplier);
+        if (!supplierData) {
+            showToast('Supplier not found', 'error');
+            return;
+        }
+        const fgKeys = supplierData.fgKeys || [];
+        if (fgKeys.length === 0) {
+            showToast('No FGs to cancel', 'error');
+            return;
+        }
+        
+        let allSuccess = true;
+        for (const fgKey of fgKeys) {
+            const r = await API.cancelStage({ fgKey, targetStage: 'RM_ORDER' });
+            if (!r.success) allSuccess = false;
+        }
+        if (allSuccess) {
+            showToast('RM Order cancelled successfully', 'success');
+            closeProcessPOModal();
+            refreshRMOrders();
+            refreshGRNOrders();
+        } else {
+            showToast('Some FGs could not be cancelled', 'warning');
+        }
+    } catch (e) {
+        showToast('Error: ' + e.message, 'error');
+    }
+}
+
+// ==============================================================
+// FIXED NAVIGATION - Left Panel
+// ==============================================================
+
+// Navigation click handler for left panel
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', function() {
         const module = this.dataset.module;
+        
+        // Update nav items
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         this.classList.add('active');
+        
+        // Update module content
         document.querySelectorAll('.module-content').forEach(c => c.classList.remove('active'));
         const el = document.getElementById(`module-${module}`);
         if (el) el.classList.add('active');
+        
+        // Load module data
         if (module === 'BUYER_ORDER') { 
             loadBuyers(); 
             setDefaultDates(); 
@@ -1399,10 +1572,37 @@ document.querySelectorAll('.nav-item').forEach(item => {
     });
 });
 
+// Ensure BUYER_ORDER loads on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load theme
+    loadTheme();
+    
+    // Load default module
+    loadBuyers();
+    setDefaultDates();
+    generateAutoSerial();
+    
+    // Set active module
+    const activeNav = document.querySelector('.nav-item.active');
+    if (activeNav) {
+        const module = activeNav.dataset.module;
+        document.querySelectorAll('.module-content').forEach(c => c.classList.remove('active'));
+        const el = document.getElementById(`module-${module}`);
+        if (el) el.classList.add('active');
+    }
+    
+    console.log('✅ Sneha Creations ERP v1.0 - Navigation Fixed');
+});
+
+// ==============================================================
+// FIXED THEME TOGGLE
+// ==============================================================
+
 function toggleTheme() {
     const html = document.documentElement;
     const icon = document.getElementById('themeIcon');
     const currentTheme = html.getAttribute('data-theme');
+    
     if (currentTheme === 'dark') {
         html.removeAttribute('data-theme');
         if (icon) icon.className = 'fas fa-moon';
@@ -1418,6 +1618,7 @@ function loadTheme() {
     const savedTheme = localStorage.getItem('theme');
     const html = document.documentElement;
     const icon = document.getElementById('themeIcon');
+    
     if (savedTheme === 'dark') {
         html.setAttribute('data-theme', 'dark');
         if (icon) icon.className = 'fas fa-sun';
@@ -1427,8 +1628,301 @@ function loadTheme() {
     }
 }
 
+// Call loadTheme on page load
 document.addEventListener('DOMContentLoaded', function() {
     loadTheme();
 });
+// ==============================================================
+// FIXED: Cancel BOM - Cancels entire FG with cascade
+// ==============================================================
 
-console.log('✅ SRMS Frontend loaded successfully');
+// Override the cancelStageAction function with full FG cancellation
+// ==============================================================
+// FIX: BOM Cancel - Override the render to use cancelFG
+// ==============================================================
+
+// Store original render function
+const originalRenderBOMOrders = window.renderBOMOrders;
+
+// Override renderBOMOrders to use cancelFG
+window.renderBOMOrders = function(orders) {
+    const tb = document.getElementById('bomOrderBody');
+    if (!orders || orders.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">No pending orders</td></tr>';
+        return;
+    }
+    let html = '';
+    orders.forEach(o => {
+        const date = o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '—';
+        const reqStatus = o.requirementStatus || 'PENDING';
+        const statusBadge = reqStatus === 'COMPLETED' ? 'success' : reqStatus === 'PENDING' ? 'warning' : 'info';
+        const fgKey = o.fgKey || '—';
+        
+        // Check if already cancelled
+        const isCancelled = o.bomStatus === 'CANCELLED' || o.requirementStatus === 'CANCELLED';
+        
+        html += `<tr>
+            <td><strong>${fgKey}</strong></td>
+            <td>${o.buyerOrderNo || '—'}</td>
+            <td>${date}</td>
+            <td>
+                ${!isCancelled ? `
+                <button class="btn btn-primary btn-sm" onclick="openBOMModal('${fgKey}')"><i class="fas fa-pencil-alt"></i> Assign RM</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelFG('${fgKey}')"><i class="fas fa-undo"></i> Cancel</button>
+                ` : `
+                <span class="badge-status danger">CANCELLED</span>
+                `}
+                <span class="badge-status ${statusBadge}">${reqStatus}</span>
+            </td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+};
+
+console.log('✅ BOM Cancel override loaded');
+// ==============================================================
+// REPLACE the cancelFG function in frontend/js/app.js
+// With this version that shows proper workflow messages
+// ==============================================================
+
+async function cancelFG(fgKey) {
+    // Check if it's a BOM cancellation (we're on BOM page)
+    const bomRow = document.querySelector(`#bomOrderBody tr:has(td:contains("${fgKey}"))`);
+    
+    // First confirmation
+    if (!confirm(`⚠️ Are you sure you want to CANCEL FG: ${fgKey}?\n\nThis will cancel the BOM for this FG.\n\nNote: Cancellation is only allowed if no downstream records exist.\n\nContinue?`)) {
+        return;
+    }
+    
+    // Second confirmation
+    if (!confirm(`⚠️ FINAL CONFIRMATION: Cancel BOM for FG ${fgKey}?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+    
+    showToast(`Checking FG ${fgKey} status...`, 'info');
+    
+    try {
+        const response = await fetch('/utils/cancel/fg', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ fg_key: fgKey })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showToast(`✅ BOM cancelled for FG ${fgKey}`, 'success');
+            refreshBOMOrders();
+            refreshRMOrders();
+            refreshGRNOrders();
+            refreshIssueRMOrders();
+        } else if (result.blocked) {
+            // Show blocked message with details
+            const reasons = result.reason || ['Downstream records exist'];
+            alert(`❌ CANCELLATION BLOCKED\n\nThis FG has already progressed beyond the BOM stage.\n\nBlocked because:\n- ${reasons.join('\n- ')}\n\nPlease reverse the workflow one stage before cancelling.`);
+            showToast(`❌ Cannot cancel: ${result.message}`, 'error');
+        } else {
+            showToast(`❌ Error: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Cancel FG error:', error);
+        showToast(`❌ Error cancelling FG: ${error.message}`, 'error');
+    }
+}
+
+// ==============================================================
+// FIX: BOM Render - Show cancelled status with proper styling
+// ==============================================================
+
+// Override renderBOMOrders to show cancelled status
+window.renderBOMOrders = function(orders) {
+    const tb = document.getElementById('bomOrderBody');
+    if (!orders || orders.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">No pending orders</td></tr>';
+        return;
+    }
+    let html = '';
+    orders.forEach(o => {
+        const date = o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '—';
+        const reqStatus = o.requirementStatus || 'PENDING';
+        const bomStatus = o.bomStatus || 'PENDING';
+        const fgKey = o.fgKey || '—';
+        
+        // Check if cancelled
+        const isCancelled = bomStatus === 'CANCELLED' || reqStatus === 'CANCELLED';
+        
+        let statusBadge = 'info';
+        let statusText = reqStatus;
+        if (isCancelled) {
+            statusBadge = 'danger';
+            statusText = 'CANCELLED';
+        } else if (reqStatus === 'COMPLETED') {
+            statusBadge = 'success';
+        } else if (reqStatus === 'PENDING') {
+            statusBadge = 'warning';
+        }
+        
+        html += `<tr>
+            <td><strong>${fgKey}</strong></td>
+            <td>${o.buyerOrderNo || '—'}</td>
+            <td>${date}</td>
+            <td>
+                ${!isCancelled ? `
+                <button class="btn btn-primary btn-sm" onclick="openBOMModal('${fgKey}')"><i class="fas fa-pencil-alt"></i> Assign RM</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelFG('${fgKey}')"><i class="fas fa-undo"></i> Cancel</button>
+                ` : `
+                <span class="badge-status danger">CANCELLED</span>
+                `}
+                <span class="badge-status ${statusBadge}">${statusText}</span>
+            </td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+};
+
+console.log('✅ BOM render updated with cancelled status');
+
+// ==============================================================
+// FIX: BOM Render - Show cancelled status with proper styling
+// ==============================================================
+
+// Override renderBOMOrders to show cancelled status
+window.renderBOMOrders = function(orders) {
+    const tb = document.getElementById('bomOrderBody');
+    if (!orders || orders.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">No pending orders</td></tr>';
+        return;
+    }
+    let html = '';
+    orders.forEach(o => {
+        const date = o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '—';
+        const reqStatus = o.requirementStatus || 'PENDING';
+        const bomStatus = o.bomStatus || 'PENDING';
+        const fgKey = o.fgKey || '—';
+        
+        // Check if cancelled
+        const isCancelled = bomStatus === 'CANCELLED' || reqStatus === 'CANCELLED';
+        
+        let statusBadge = 'info';
+        let statusText = reqStatus;
+        if (isCancelled) {
+            statusBadge = 'danger';
+            statusText = 'CANCELLED';
+        } else if (reqStatus === 'COMPLETED') {
+            statusBadge = 'success';
+        } else if (reqStatus === 'PENDING') {
+            statusBadge = 'warning';
+        }
+        
+        html += `<tr>
+            <td><strong>${fgKey}</strong></td>
+            <td>${o.buyerOrderNo || '—'}</td>
+            <td>${date}</td>
+            <td>
+                ${!isCancelled ? `
+                <button class="btn btn-primary btn-sm" onclick="openBOMModal('${fgKey}')"><i class="fas fa-pencil-alt"></i> Assign RM</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelFG('${fgKey}')"><i class="fas fa-undo"></i> Cancel</button>
+                ` : `
+                <span class="badge-status danger">CANCELLED</span>
+                `}
+                <span class="badge-status ${statusBadge}">${statusText}</span>
+            </td>
+        </tr>`;
+    });
+    tb.innerHTML = html;
+};
+
+console.log('✅ BOM render updated with cancelled status');
+
+// ==============================================================
+// FINAL FIX: Completely replace renderBOMOrders
+// ==============================================================
+
+// Remove any existing renderBOMOrders function and replace it
+// This ensures the cancel button uses cancelFG
+
+// First, delete the old function if it exists
+if (typeof window.renderBOMOrders === 'function') {
+    delete window.renderBOMOrders;
+}
+
+// Define the new function
+window.renderBOMOrders = function(orders) {
+    console.log('🔧 renderBOMOrders called with', orders ? orders.length : 0, 'orders');
+    
+    const tb = document.getElementById('bomOrderBody');
+    if (!tb) {
+        console.error('❌ bomOrderBody not found!');
+        return;
+    }
+    
+    if (!orders || orders.length === 0) {
+        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#62748e;padding:16px;">No pending orders</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    orders.forEach(o => {
+        const date = o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '—';
+        const reqStatus = o.requirementStatus || 'PENDING';
+        const bomStatus = o.bomStatus || 'PENDING';
+        const fgKey = o.fgKey || '—';
+        
+        // Check if cancelled
+        const isCancelled = bomStatus === 'CANCELLED' || reqStatus === 'CANCELLED';
+        
+        let statusBadge = 'info';
+        let statusText = reqStatus;
+        if (isCancelled) {
+            statusBadge = 'danger';
+            statusText = 'CANCELLED';
+        } else if (reqStatus === 'COMPLETED') {
+            statusBadge = 'success';
+        } else if (reqStatus === 'PENDING') {
+            statusBadge = 'warning';
+        }
+        
+        // Build actions - using cancelFG for the cancel button
+        let actions = '';
+        if (!isCancelled) {
+            actions = `
+                <button class="btn btn-primary btn-sm" onclick="openBOMModal('${fgKey}')"><i class="fas fa-pencil-alt"></i> Assign RM</button>
+                <button class="btn btn-danger btn-sm" onclick="cancelFG('${fgKey}')"><i class="fas fa-undo"></i> Cancel</button>
+            `;
+        } else {
+            actions = `<span class="badge-status danger">CANCELLED</span>`;
+        }
+        
+        html += `<tr>
+            <td><strong>${fgKey}</strong></td>
+            <td>${o.buyerOrderNo || '—'}</td>
+            <td>${date}</td>
+            <td>
+                ${actions}
+                <span class="badge-status ${statusBadge}">${statusText}</span>
+            </td>
+        </tr>`;
+    });
+    
+    tb.innerHTML = html;
+    console.log('✅ BOM table rendered with', orders.length, 'rows');
+};
+
+// Also fix refreshBOMOrders to use the new render
+window.refreshBOMOrders = async function() {
+    console.log('🔄 Refreshing BOM orders...');
+    showToast('Loading orders...', 'info');
+    try {
+        const orders = await API.getBOMOrders();
+        console.log('📦 Received', orders ? orders.length : 0, 'BOM orders');
+        window.renderBOMOrders(orders);
+        showToast(orders && orders.length ? 'Orders loaded' : 'No pending orders', orders && orders.length ? 'success' : 'info');
+    } catch (e) {
+        console.error('❌ Error loading BOM orders:', e);
+        showToast('Error: ' + e.message, 'error');
+    }
+};
+
+console.log('✅ BOM render function fixed - using cancelFG');

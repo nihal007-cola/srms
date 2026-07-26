@@ -49,6 +49,9 @@
                 </div>
             </nav>
             <div class="panel-footer">
+                <button onclick="logout()" style="background: none; border: none; color: #ea4335; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 4px;">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
                 <span class="version">v1.0</span>
                 <span class="status"><i class="fas fa-circle" style="color:#34a853;"></i> Live</span>
             </div>
@@ -432,5 +435,12 @@
     <div class="toast" id="toast"></div>
 
     <script src="/static/js/app.js"></script>
+    <script>
+        function logout() {
+            localStorage.removeItem("access_token");
+            localStorage.removeItem("user");
+            window.location.href = "/login";
+        }
+    </script>
 </body>
 </html>
