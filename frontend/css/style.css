@@ -1033,3 +1033,12 @@ table select:focus {
 #bomModal .modal-box {
     z-index: 1000;
 }
+
+/* Make quantity inputs wider */
+.grid-table input[type="number"],
+.grid-table input[type="text"],
+.qty-input {
+    width: 80px;
+    min-width: 80px;
+    max-width: 120px;
+}

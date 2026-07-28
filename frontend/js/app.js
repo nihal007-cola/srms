@@ -26,6 +26,51 @@ if (!token) {
 }
 
 // 4. Verify token with server
+
+// ============ SESSION MANAGEMENT ============
+const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+const MINIMIZE_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+let inactivityTimer;
+let minimizeTimer;
+
+function resetInactivityTimer() {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+        console.log("Session expired due to inactivity");
+        alert("Your session has expired due to inactivity. Please login again.");
+        logoutUser();
+    }, SESSION_TIMEOUT);
+}
+
+function handleVisibilityChange() {
+    if (document.hidden) {
+        clearTimeout(minimizeTimer);
+        minimizeTimer = setTimeout(() => {
+            console.log("Session expired - browser minimized too long");
+            alert("Session expired. Please login again.");
+            logoutUser();
+        }, MINIMIZE_TIMEOUT);
+    } else {
+        clearTimeout(minimizeTimer);
+        resetInactivityTimer();
+    }
+}
+
+function logoutUser() {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+}
+
+function initSessionManagement() {
+    const events = ["click", "keypress", "mousemove", "scroll", "touchstart", "keydown"];
+    events.forEach(event => {
+        document.addEventListener(event, resetInactivityTimer);
+    });
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    resetInactivityTimer();
+}
+
 console.log('🔐 Verifying token...');
 fetch('/api/auth/me', {
     headers: {
@@ -297,7 +342,7 @@ function renderGrid(gridData, fgOrderSerial) {
         b += `<tr><td><strong>${idx + 1}</strong></td>`;
         b += `<td><input type="text" value="${row[1] || ''}" data-row="${idx}" data-col="1" placeholder="Design" style="min-width:70px;"></td>`;
         b += `<td><input type="text" value="${row[2] || ''}" data-row="${idx}" data-col="2" placeholder="Color" style="min-width:70px;"></td>`;
-        for (let i = 3; i < row.length; i++) { const val = (row[i] === 0 || row[i] === '' || row[i] === null) ? '' : row[i]; b += `<td><input type="number" value="${val}" data-row="${idx}" data-col="${i}" placeholder="0" style="width:42px;"></td>`; }
+        for (let i = 3; i < row.length; i++) { const val = (row[i] === 0 || row[i] === '' || row[i] === null) ? '' : row[i]; b += `<td><input type="number" value="${val}" data-row="${idx}" data-col="${i}" placeholder="0" style="width:90px; min-width:90px; min-width:70px;"></td>`; }
         b += '</tr>';
     });
     document.getElementById('gridBody').innerHTML = b;
@@ -307,7 +352,7 @@ function addSizeColumn() {
     const size = prompt('Enter size value:'); if (!size) return;
     const num = parseInt(size); if (isNaN(num) || num < 1) { showToast('Invalid size', 'error'); return; }
     const hRow = document.querySelector('#gridHeaders tr'); if (hRow) { const th = document.createElement('th'); th.textContent = num; hRow.appendChild(th); }
-    document.querySelectorAll('#gridBody tr').forEach(row => { const td = document.createElement('td'); td.innerHTML = `<input type="number" value="" placeholder="0" style="width:42px;">`; row.appendChild(td); });
+    document.querySelectorAll('#gridBody tr').forEach(row => { const td = document.createElement('td'); td.innerHTML = `<input type="number" value="" placeholder="0" style="width:90px; min-width:90px; min-width:70px;">`; row.appendChild(td); });
     showToast(`Size ${num} added`, 'success');
 }
 
@@ -660,8 +705,8 @@ function renderPOItems() {
             <td>${group.garmentSize || 'ALL'}</td><td>${group.itemSize || ''}</td>
             <td>${group.color || ''}</td><td>${balance.toFixed(2)}</td>
             <td>${group.uom || 'PCS'}</td><td>₹${(group.rate || 0).toFixed(2)}</td>
-            <td><input type="number" class="group-cgst" data-group="${aggKey}" value="${cgst}" step="0.01" style="width:40px;" onchange="updateGroupCGST('${aggKey}', this.value)"></td>
-            <td><input type="number" class="group-igst" data-group="${aggKey}" value="${igst}" step="0.01" style="width:40px;" onchange="updateGroupIGST('${aggKey}', this.value)"></td></tr>`;
+            <td><input type="number" class="group-cgst" data-group="${aggKey}" value="${cgst}" step="0.01" style="width:60px; min-width:60px;" onchange="updateGroupCGST('${aggKey}', this.value)"></td>
+            <td><input type="number" class="group-igst" data-group="${aggKey}" value="${igst}" step="0.01" style="width:60px; min-width:60px;" onchange="updateGroupIGST('${aggKey}', this.value)"></td></tr>`;
     });
     tb.innerHTML = html;
     document.getElementById('poModalItemCount').innerHTML = `Aggregated Items: <strong>${groupKeys.length}</strong>`;
@@ -888,7 +933,7 @@ function renderGRNUnpacked(order) {
                 <td class="${balanceClass}">${balanceText}</td>
                 <td><input type="number" class="grn-rate" value="${item.rate || 0}" step="0.01" style="width:50px;" class="grn-item-input"></td>
                 <td><input type="text" class="grn-hsn" value="${item.hsn || ''}" style="width:50px;" class="grn-item-input"></td>
-                <td><input type="number" class="grn-qty" value="${balance > 0 ? balance.toFixed(2) : '0'}" step="0.01" style="width:60px;" class="grn-item-input" ${isComplete ? 'disabled' : ''}></td>
+                <td><input type="number" class="grn-qty" value="${balance > 0 ? balance.toFixed(2) : '0'}" step="0.01" style="width:80px; min-width:80px;" class="grn-item-input" ${isComplete ? 'disabled' : ''}></td>
             </tr>`;
         });
         html += `</tbody></table></div>`;
@@ -1071,7 +1116,7 @@ function renderIssueRMItems(items, fgKey) {
             <td>${(item.grnQty || 0).toFixed(2)}</td>
             <td>${(item.issuedQty || 0).toFixed(2)}</td>
             <td><span class="${available > maxIssuable ? 'issue-buffer-warning' : 'issue-buffer-ok'}">${(available).toFixed(2)}</span></td>
-            <td><input type="number" class="issue-qty" data-idx="${idx}" value="${Math.min(defaultQty, maxIssuable).toFixed(2)}" step="0.01" style="width:70px;" onchange="validateIssueQty(${idx}, this.value)"></td>
+            <td><input type="number" class="issue-qty" data-idx="${idx}" value="${Math.min(defaultQty, maxIssuable).toFixed(2)}" step="0.01" style="width:90px; min-width:90px;" onchange="validateIssueQty(${idx}, this.value)"></td>
         </tr>`;
     });
     tb.innerHTML = html;

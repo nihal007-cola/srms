@@ -17,7 +17,7 @@ security = HTTPBearer()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "your-secret-key-change-in-production")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRY_HOURS = 24
+JWT_EXPIRY_HOURS = 0.5  # 30 minutes
 
 # Pydantic models
 class LoginRequest(BaseModel):
